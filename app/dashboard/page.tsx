@@ -4,6 +4,7 @@ import { BudgetHeader } from './_components/BudgetHeader'
 import { AuctionList } from './_components/AuctionList'
 import { LaunchAuction } from './_components/LaunchAuction'
 import { MyRoster } from './_components/MyRoster'
+import { PlayersList } from './_components/PlayersList'
 import type { AuctionWithPlayer, Player } from '@/lib/supabase/types'
 
 export default async function DashboardPage() {
@@ -19,7 +20,7 @@ export default async function DashboardPage() {
 
   if (!team) return <p className="p-4">Squadra non trovata. Contatta l&apos;admin.</p>
 
-  const [{ data: soldPlayers }, { data: activeAuctions }] = await Promise.all([
+  const [{ data: soldPlayers }, { data: activeAuctions }, { data: allPlayers }] = await Promise.all([
     supabase.from('players').select('*').eq('sold_to_team_id', team.id),
     supabase
       .from('auctions')
@@ -30,26 +31,58 @@ export default async function DashboardPage() {
       `)
       .eq('status', 'active')
       .order('created_at', { ascending: false }),
+    supabase
+      .from('players')
+      .select('id, name, roles, serie_a_team, fvm, is_sold, sold_price, sold_to_team_id, teams!players_sold_to_team_id_fkey(team_name)')
+      .order('name'),
   ])
+
+  // Build active auction lookup: player_id → { price, winner_team }
+  const auctionMap = new Map<number, { price: number; winner: string | null }>()
+  for (const a of activeAuctions ?? []) {
+    auctionMap.set((a as AuctionWithPlayer).player_id, {
+      price: (a as AuctionWithPlayer).current_price,
+      winner: (a as AuctionWithPlayer).teams_winner?.team_name ?? null,
+    })
+  }
+
+  const playersForList = (allPlayers ?? []).map((p: {
+    id: number; name: string; roles: string[]; serie_a_team: string | null
+    fvm: number | null; is_sold: boolean; sold_price: number | null
+    sold_to_team_id: string | null; teams: { team_name: string | null } | { team_name: string | null }[] | null
+  }) => {
+    const auction = auctionMap.get(p.id)
+    return {
+      id: p.id,
+      name: p.name,
+      roles: p.roles,
+      serie_a_team: p.serie_a_team,
+      fvm: p.fvm,
+      is_sold: p.is_sold,
+      sold_price: p.sold_price,
+      owner_team_name: (Array.isArray(p.teams) ? p.teams[0]?.team_name : p.teams?.team_name) ?? null,
+      in_active_auction: !!auction,
+      auction_price: auction?.price ?? null,
+      auction_winner_team: auction?.winner ?? null,
+    }
+  })
 
   const rosterCount = soldPlayers?.length ?? 0
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <BudgetHeader
-        team={team}
-        rosterCount={rosterCount}
-        rosterMin={25}
-        rosterMax={28}
-      />
-      <main className="max-w-2xl mx-auto p-4 space-y-6">
-        <p className="text-gray-400 text-sm text-center">
-          {config?.enabled_roles?.length
-            ? `Ruoli abilitati: ${config.enabled_roles.join(', ')}`
-            : 'Nessun ruolo abilitato — aspetta l\'admin'}
-        </p>
+    <div className="min-h-screen" style={{ background: 'var(--background)' }}>
+      <BudgetHeader team={team} rosterCount={rosterCount} rosterMin={25} rosterMax={28} />
+      <main className="max-w-2xl mx-auto p-4 space-y-4">
+        {config?.enabled_roles?.length ? (
+          <p className="text-xs text-center text-gray-400">
+            Ruoli abilitati al lancio: <span className="font-medium text-gray-600">{config.enabled_roles.join(', ')}</span>
+          </p>
+        ) : (
+          <p className="text-xs text-center text-gray-400">Nessun ruolo abilitato — aspetta l&apos;admin</p>
+        )}
         <AuctionList initialAuctions={(activeAuctions ?? []) as AuctionWithPlayer[]} currentTeam={team} />
         {config && <LaunchAuction config={config} />}
+        <PlayersList players={playersForList} />
         <MyRoster players={(soldPlayers ?? []) as (Player & { sold_price: number })[]} />
       </main>
     </div>
