@@ -89,7 +89,8 @@ export function LaunchAuction({ config }: Props) {
           <button
             type="submit"
             disabled={isPending}
-            className="flex-1 bg-green-600 text-white py-2 rounded-lg text-sm font-semibold disabled:opacity-50"
+            className="flex-1 text-white py-2 rounded-lg text-sm font-semibold disabled:opacity-50"
+            style={{ background: 'var(--boccea-red)' }}
           >
             {isPending ? '...' : `Lancia ${selected.name}`}
           </button>

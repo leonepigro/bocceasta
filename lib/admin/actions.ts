@@ -34,16 +34,28 @@ export async function adminCancelAuction(auctionId: string) {
 
 export async function createTeam(teamName: string, ownerName: string, email: string, password: string) {
   const service = await assertAdmin()
-  const { data: authData, error: authError } = await service.auth.admin.createUser({
-    email,
-    password,
-    user_metadata: { role: 'user' },
-    email_confirm: true,
-  })
-  if (authError) return { error: authError.message }
+
+  // Try to find existing user first
+  const { data: existingUsers } = await service.auth.admin.listUsers()
+  const existingUser = existingUsers?.users?.find(u => u.email === email)
+
+  let userId: string
+
+  if (existingUser) {
+    userId = existingUser.id
+  } else {
+    const { data: authData, error: authError } = await service.auth.admin.createUser({
+      email,
+      password,
+      user_metadata: { role: 'user' },
+      email_confirm: true,
+    })
+    if (authError) return { error: authError.message }
+    userId = authData.user.id
+  }
 
   const { error: teamError } = await service.from('teams').insert({
-    user_id: authData.user.id,
+    user_id: userId,
     team_name: teamName,
     owner_name: ownerName,
   })

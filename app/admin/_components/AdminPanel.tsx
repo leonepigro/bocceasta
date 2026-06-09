@@ -29,9 +29,10 @@ export default function AdminPanel({ config, teams, auctions }: Props) {
   const [active, setActive] = useState<Section>('import')
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b px-6 py-3">
-        <h1 className="font-bold text-lg">Admin — Asta FC Boccea</h1>
+    <div className="min-h-screen" style={{ background: 'var(--background)' }}>
+      <header className="text-white px-6 py-3 flex items-center gap-3 shadow-md" style={{ background: 'var(--boccea-red)' }}>
+        <span className="text-xl">⚙️</span>
+        <h1 className="font-bold text-lg">Admin — Fantacalcio Boccea</h1>
       </header>
       <div className="flex gap-6 p-6 max-w-5xl mx-auto">
         <AdminSidebar active={active} onChange={setActive} />

@@ -1,4 +1,5 @@
 'use client'
+import Image from 'next/image'
 import type { Team } from '@/lib/supabase/types'
 
 type Props = {
@@ -9,15 +10,21 @@ type Props = {
 }
 
 export function BudgetHeader({ team, rosterCount, rosterMin, rosterMax }: Props) {
+  const rosterOk = rosterCount >= rosterMin
   return (
-    <header className="bg-white border-b px-4 py-3 flex items-center justify-between">
-      <div>
-        <h1 className="font-bold text-lg">{team.team_name}</h1>
-        <p className="text-sm text-gray-500">{team.owner_name}</p>
+    <header className="text-white px-4 py-3 flex items-center justify-between shadow-md" style={{ background: 'var(--boccea-red)' }}>
+      <div className="flex items-center gap-3">
+        <Image src="/fc-boccea-logo_ufficiale.png" alt="FC Boccea" width={36} height={36} className="rounded-full bg-white p-0.5" />
+        <div>
+          <h1 className="font-bold text-base leading-tight">{team.team_name}</h1>
+          <p className="text-xs opacity-75">{team.owner_name}</p>
+        </div>
       </div>
       <div className="text-right">
-        <p className="text-2xl font-bold text-green-600">{team.budget_remaining} cr</p>
-        <p className="text-xs text-gray-500">
+        <p className="text-2xl font-bold leading-tight" style={{ color: 'var(--boccea-gold)' }}>
+          {team.budget_remaining} cr
+        </p>
+        <p className={`text-xs ${rosterOk ? 'opacity-75' : 'text-yellow-300 font-semibold'}`}>
           Rosa: {rosterCount} / {rosterMin}-{rosterMax}
         </p>
       </div>

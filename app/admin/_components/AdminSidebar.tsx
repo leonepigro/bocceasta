@@ -24,9 +24,10 @@ export function AdminSidebar({ active, onChange }: Props) {
           <li key={s.id}>
             <button
               onClick={() => onChange(s.id)}
-              className={`w-full text-left px-3 py-2 rounded-lg text-sm ${
-                active === s.id ? 'bg-blue-600 text-white font-semibold' : 'hover:bg-gray-100'
+              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                active === s.id ? 'text-white font-semibold' : 'text-gray-700 hover:bg-gray-100'
               }`}
+              style={active === s.id ? { background: 'var(--boccea-red)' } : {}}
             >
               {s.label}
             </button>

@@ -52,7 +52,7 @@ export function AuctionCard({ auction, currentTeam }: Props) {
   }
 
   return (
-    <div className={`bg-white rounded-xl shadow p-4 border-l-4 ${isWinning ? 'border-green-500' : 'border-gray-200'}`}>
+    <div className={`bg-white rounded-xl shadow-sm p-4 border-l-4 ${isWinning ? '' : 'border-gray-200'}`} style={isWinning ? { borderLeftColor: 'var(--boccea-gold)' } : {}}>
       <div className="flex justify-between items-start mb-2">
         <div>
           <p className="font-bold">{auction.players.name}</p>
@@ -71,10 +71,10 @@ export function AuctionCard({ auction, currentTeam }: Props) {
       </div>
 
       <div className="flex items-center gap-2 mb-3">
-        <span className="text-xl font-bold text-blue-600">{auction.current_price} cr</span>
+        <span className="text-xl font-bold" style={{ color: 'var(--boccea-red)' }}>{auction.current_price} cr</span>
         {auction.teams_winner && (
-          <span className={`text-sm px-2 py-0.5 rounded-full ${isWinning ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
-            {isWinning ? '✓ Tu' : auction.teams_winner.team_name}
+          <span className={`text-sm px-2 py-0.5 rounded-full font-medium ${isWinning ? 'text-amber-800' : 'bg-gray-100 text-gray-600'}`} style={isWinning ? { background: 'var(--boccea-gold-light)', color: '#7a4f00' } : {}}>
+            {isWinning ? '★ Tu' : auction.teams_winner.team_name}
           </span>
         )}
       </div>
@@ -92,7 +92,8 @@ export function AuctionCard({ auction, currentTeam }: Props) {
           <button
             type="submit"
             disabled={isPending}
-            className="bg-blue-600 text-white px-4 py-1.5 rounded-lg text-sm font-semibold disabled:opacity-50"
+            className="text-white px-4 py-1.5 rounded-lg text-sm font-semibold disabled:opacity-50"
+            style={{ background: 'var(--boccea-red)' }}
           >
             {isPending ? '...' : 'Rilancia'}
           </button>
