@@ -26,6 +26,7 @@ type Props = {
 
 function LaunchInline({ player, budget, onDone }: { player: PlayerRow; budget: number; onDone: () => void }) {
   const [bid, setBid] = useState(1)
+  const [autobidMax, setAutobidMax] = useState<number | ''>('')
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
@@ -34,31 +35,47 @@ function LaunchInline({ player, budget, onDone }: { player: PlayerRow; budget: n
     e.preventDefault()
     setError(null)
     startTransition(async () => {
-      const result = await launchAuction(player.id, bid)
+      const result = await launchAuction(
+        player.id,
+        bid,
+        autobidMax !== '' && autobidMax > bid ? autobidMax : undefined
+      )
       if (result.error) setError(result.error)
       else { onDone(); router.refresh() }
     })
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex gap-1 items-center mt-1" onClick={e => e.stopPropagation()}>
-      <input
-        type="number"
-        min={1}
-        max={budget}
-        value={bid}
-        onChange={e => setBid(parseInt(e.target.value) || 1)}
-        className="w-16 border border-gray-200 rounded px-2 py-1 text-xs"
-        placeholder="cr"
-        autoFocus
-      />
-      <button type="submit" disabled={isPending}
-        className="text-white px-2 py-1 rounded text-xs font-semibold disabled:opacity-50"
-        style={{ background: 'var(--boccea-red)' }}>
-        {isPending ? '...' : 'Lancia'}
-      </button>
-      <button type="button" onClick={onDone} className="text-gray-400 text-xs px-1">✕</button>
-      {error && <span className="text-red-500 text-xs">{error}</span>}
+    <form onSubmit={handleSubmit} className="mt-2 space-y-1.5" onClick={e => e.stopPropagation()}>
+      <div className="flex gap-1 items-center">
+        <span className="text-xs text-gray-500 w-16 shrink-0">Apertura:</span>
+        <input
+          type="number" min={1} max={budget} value={bid}
+          onChange={e => setBid(parseInt(e.target.value) || 1)}
+          className="w-16 border border-gray-200 rounded px-2 py-1 text-xs" autoFocus
+        />
+        <span className="text-xs text-gray-400">cr</span>
+      </div>
+      <div className="flex gap-1 items-center">
+        <span className="text-xs text-gray-500 w-16 shrink-0">🤖 Max:</span>
+        <input
+          type="number" min={bid + 1} max={budget}
+          value={autobidMax}
+          onChange={e => setAutobidMax(e.target.value === '' ? '' : parseInt(e.target.value) || bid + 1)}
+          placeholder="opz."
+          className="w-16 border border-gray-200 rounded px-2 py-1 text-xs"
+        />
+        <span className="text-xs text-gray-400">cr</span>
+      </div>
+      <div className="flex gap-1 items-center">
+        <button type="submit" disabled={isPending}
+          className="text-white px-3 py-1 rounded text-xs font-semibold disabled:opacity-50"
+          style={{ background: 'var(--boccea-red)' }}>
+          {isPending ? '...' : 'Lancia'}
+        </button>
+        <button type="button" onClick={onDone} className="text-gray-400 text-xs px-1 hover:text-gray-600">✕</button>
+        {error && <span className="text-red-500 text-xs">{error}</span>}
+      </div>
     </form>
   )
 }

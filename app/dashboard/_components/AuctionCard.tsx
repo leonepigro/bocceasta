@@ -6,6 +6,7 @@ import { placeBid, setAutobid, removeAutobid } from '@/lib/auction/actions'
 type Props = {
   auction: AuctionWithPlayer
   currentTeam: Team
+  currentAutobid: number | null
 }
 
 function useCountdown(expiresAt: string) {
@@ -30,7 +31,7 @@ function formatTime(seconds: number) {
   return `${s}s`
 }
 
-export function AuctionCard({ auction, currentTeam }: Props) {
+export function AuctionCard({ auction, currentTeam, currentAutobid }: Props) {
   const secondsLeft = useCountdown(auction.expires_at)
   const [bidAmount, setBidAmount] = useState(auction.current_price + 1)
   const [autobidMax, setAutobidMax] = useState(auction.current_price + 1)
@@ -195,21 +196,24 @@ export function AuctionCard({ auction, currentTeam }: Props) {
         </div>
       )}
 
-      {/* Mostra che sei vincente con autobid attivo */}
-      {!isExpired && isWinning && (
-        <p className="text-xs text-gray-400">
-          Sei in testa — imposta un autobid con 🤖 se vuoi protezione automatica
-        </p>
-      )}
-
-      {/* Se vincente, mostra pulsante autobid */}
+      {/* Badge autobid attivo + pulsante modifica */}
       {!isExpired && isWinning && !showAutobid && (
-        <button
-          onClick={() => setShowAutobid(true)}
-          className="mt-1 text-xs px-2 py-1 rounded border border-gray-200 text-gray-500 hover:bg-gray-50"
-        >
-          🤖 Imposta autobid
-        </button>
+        <div className="flex items-center gap-2 mt-1">
+          {currentAutobid ? (
+            <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+              style={{ background: 'var(--boccea-gold-light)', color: '#7a4f00' }}>
+              🤖 Autobid max: {currentAutobid} cr
+            </span>
+          ) : (
+            <span className="text-xs text-gray-400">Nessun autobid attivo</span>
+          )}
+          <button
+            onClick={() => setShowAutobid(true)}
+            className="text-xs px-2 py-0.5 rounded border border-gray-200 text-gray-500 hover:bg-gray-50"
+          >
+            {currentAutobid ? 'Modifica' : '🤖 Imposta'}
+          </button>
+        </div>
       )}
 
       {/* Autobid per il vincente */}

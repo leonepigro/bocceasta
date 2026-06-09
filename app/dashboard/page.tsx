@@ -22,7 +22,7 @@ export default async function DashboardPage() {
     return <p className="p-4">Squadra non trovata. Contatta l&apos;admin.</p>
   }
 
-  const [{ data: soldPlayers }, { data: activeAuctions }, { data: allPlayers }] = await Promise.all([
+  const [{ data: soldPlayers }, { data: activeAuctions }, { data: allPlayers }, { data: myAutobids }] = await Promise.all([
     supabase.from('players').select('*').eq('sold_to_team_id', team.id),
     supabase
       .from('auctions')
@@ -37,6 +37,10 @@ export default async function DashboardPage() {
       .from('players')
       .select('id, name, roles, serie_a_team, fvm, is_sold, sold_price, sold_to_team_id, teams!players_sold_to_team_id_fkey(team_name)')
       .order('name'),
+    supabase
+      .from('autobids')
+      .select('auction_id, max_amount')
+      .eq('team_id', team.id),
   ])
 
   // Build active auction lookup: player_id → { price, winner_team }
@@ -82,7 +86,11 @@ export default async function DashboardPage() {
         ) : (
           <p className="text-xs text-center text-gray-400">Nessun ruolo abilitato — aspetta l&apos;admin</p>
         )}
-        <AuctionList initialAuctions={(activeAuctions ?? []) as AuctionWithPlayer[]} currentTeam={team} />
+        <AuctionList
+          initialAuctions={(activeAuctions ?? []) as AuctionWithPlayer[]}
+          currentTeam={team}
+          autobidMap={Object.fromEntries((myAutobids ?? []).map(a => [a.auction_id, a.max_amount]))}
+        />
         <PlayersList players={playersForList} enabledRoles={config?.enabled_roles ?? []} currentTeam={team} />
         <MyRoster players={(soldPlayers ?? []) as (Player & { sold_price: number })[]} />
       </main>

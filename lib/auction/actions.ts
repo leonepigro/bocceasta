@@ -11,7 +11,7 @@ async function getTeamId() {
   return { error: null, supabase, teamId: team.id as string }
 }
 
-export async function launchAuction(playerId: number, initialBid: number) {
+export async function launchAuction(playerId: number, initialBid: number, autobidMax?: number) {
   const { error, supabase, teamId } = await getTeamId()
   if (error) return { error }
 
@@ -22,6 +22,16 @@ export async function launchAuction(playerId: number, initialBid: number) {
   })
 
   if (rpcError) return { error: rpcError.message }
+
+  // Imposta autobid se fornito e maggiore dell'offerta iniziale
+  if (autobidMax && autobidMax > initialBid) {
+    await supabase.rpc('set_autobid', {
+      p_auction_id: data as string,
+      p_team_id: teamId,
+      p_max_amount: autobidMax,
+    })
+  }
+
   revalidatePath('/dashboard')
   return { auctionId: data as string }
 }

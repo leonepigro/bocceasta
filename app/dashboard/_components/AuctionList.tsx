@@ -7,13 +7,13 @@ import { AuctionCard } from './AuctionCard'
 type Props = {
   initialAuctions: AuctionWithPlayer[]
   currentTeam: Team
+  autobidMap: Record<string, number>
 }
 
-export function AuctionList({ initialAuctions, currentTeam }: Props) {
+export function AuctionList({ initialAuctions, currentTeam, autobidMap }: Props) {
   const [auctions, setAuctions] = useState<AuctionWithPlayer[]>(initialAuctions)
   const supabase = createClient()
 
-  // Sync when server re-renders pass new initialAuctions (after router.refresh())
   useEffect(() => {
     setAuctions(initialAuctions)
   }, [initialAuctions])
@@ -50,7 +50,12 @@ export function AuctionList({ initialAuctions, currentTeam }: Props) {
       <h2 className="font-semibold mb-3">Aste in corso ({auctions.length})</h2>
       <div className="space-y-3">
         {auctions.map(a => (
-          <AuctionCard key={a.id} auction={a} currentTeam={currentTeam} />
+          <AuctionCard
+            key={a.id}
+            auction={a}
+            currentTeam={currentTeam}
+            currentAutobid={autobidMap[a.id] ?? null}
+          />
         ))}
       </div>
     </section>
