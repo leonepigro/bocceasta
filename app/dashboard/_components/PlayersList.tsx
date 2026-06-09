@@ -15,11 +15,12 @@ type PlayerRow = {
   auction_winner_team: string | null
 }
 
-type Props = { players: PlayerRow[] }
+type Props = { players: PlayerRow[]; enabledRoles: string[] }
 
-export function PlayersList({ players }: Props) {
+export function PlayersList({ players, enabledRoles }: Props) {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'free' | 'sold' | 'auction'>('all')
+  const [roleFilter, setRoleFilter] = useState<string | null>(null)
 
   const filtered = useMemo(() => {
     return players.filter(p => {
@@ -31,9 +32,10 @@ export function PlayersList({ players }: Props) {
         filter === 'free' ? !p.is_sold && !p.in_active_auction :
         filter === 'sold' ? p.is_sold :
         filter === 'auction' ? p.in_active_auction : true
-      return matchSearch && matchFilter
+      const matchRole = !roleFilter || p.roles.includes(roleFilter)
+      return matchSearch && matchFilter && matchRole
     })
-  }, [players, search, filter])
+  }, [players, search, filter, roleFilter])
 
   const counts = useMemo(() => ({
     free: players.filter(p => !p.is_sold && !p.in_active_auction).length,
@@ -62,6 +64,28 @@ export function PlayersList({ players }: Props) {
           </button>
         ))}
       </div>
+
+      {enabledRoles.length > 0 && (
+        <div className="flex gap-1 mb-3 flex-wrap">
+          <button
+            onClick={() => setRoleFilter(null)}
+            className="text-xs px-3 py-1 rounded-full border transition-colors"
+            style={!roleFilter ? { background: 'var(--boccea-gold)', color: '#7a4f00', borderColor: 'var(--boccea-gold)' } : { background: 'white', color: '#555', borderColor: '#ddd' }}
+          >
+            Tutti i ruoli
+          </button>
+          {enabledRoles.map(role => (
+            <button
+              key={role}
+              onClick={() => setRoleFilter(roleFilter === role ? null : role)}
+              className="text-xs px-3 py-1 rounded-full border transition-colors font-mono"
+              style={roleFilter === role ? { background: 'var(--boccea-gold)', color: '#7a4f00', borderColor: 'var(--boccea-gold)' } : { background: 'white', color: '#555', borderColor: '#ddd' }}
+            >
+              {role}
+            </button>
+          ))}
+        </div>
+      )}
 
       <input
         type="text"

@@ -85,7 +85,7 @@ export default async function DashboardPage() {
         )}
         <AuctionList initialAuctions={(activeAuctions ?? []) as AuctionWithPlayer[]} currentTeam={team} />
         {config && <LaunchAuction config={config} />}
-        <PlayersList players={playersForList} />
+        <PlayersList players={playersForList} enabledRoles={config?.enabled_roles ?? []} />
         <MyRoster players={(soldPlayers ?? []) as (Player & { sold_price: number })[]} />
       </main>
     </div>
