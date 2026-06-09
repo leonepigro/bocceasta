@@ -3,7 +3,8 @@ import { redirect } from 'next/navigation'
 import { BudgetHeader } from './_components/BudgetHeader'
 import { AuctionList } from './_components/AuctionList'
 import { LaunchAuction } from './_components/LaunchAuction'
-import type { AuctionWithPlayer } from '@/lib/supabase/types'
+import { MyRoster } from './_components/MyRoster'
+import type { AuctionWithPlayer, Player } from '@/lib/supabase/types'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -48,6 +49,7 @@ export default async function DashboardPage() {
         </p>
         <AuctionList initialAuctions={(activeAuctions ?? []) as AuctionWithPlayer[]} currentTeam={team} />
         {config && <LaunchAuction config={config} />}
+        <MyRoster players={(soldPlayers ?? []) as (Player & { sold_price: number })[]} />
       </main>
     </div>
   )
