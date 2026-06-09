@@ -72,6 +72,14 @@ export async function updateTeamBudget(teamId: string, newBudget: number) {
   return { success: true }
 }
 
+export async function updateTeamInfo(teamId: string, teamName: string, ownerName: string) {
+  const service = await assertAdmin()
+  const { error } = await service.from('teams').update({ team_name: teamName, owner_name: ownerName }).eq('id', teamId)
+  if (error) return { error: error.message }
+  revalidatePath('/admin')
+  return { success: true }
+}
+
 export async function getExportData() {
   const service = await assertAdmin()
   const { data, error } = await service
