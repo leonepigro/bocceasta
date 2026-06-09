@@ -2,7 +2,6 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { BudgetHeader } from './_components/BudgetHeader'
 import { AuctionList } from './_components/AuctionList'
-import { LaunchAuction } from './_components/LaunchAuction'
 import { MyRoster } from './_components/MyRoster'
 import { PlayersList } from './_components/PlayersList'
 import type { AuctionWithPlayer, Player } from '@/lib/supabase/types'
@@ -84,8 +83,7 @@ export default async function DashboardPage() {
           <p className="text-xs text-center text-gray-400">Nessun ruolo abilitato — aspetta l&apos;admin</p>
         )}
         <AuctionList initialAuctions={(activeAuctions ?? []) as AuctionWithPlayer[]} currentTeam={team} />
-        {config && <LaunchAuction config={config} />}
-        <PlayersList players={playersForList} enabledRoles={config?.enabled_roles ?? []} />
+        <PlayersList players={playersForList} enabledRoles={config?.enabled_roles ?? []} currentTeam={team} />
         <MyRoster players={(soldPlayers ?? []) as (Player & { sold_price: number })[]} />
       </main>
     </div>
