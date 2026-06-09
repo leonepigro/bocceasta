@@ -35,7 +35,7 @@ export default function LoginPage() {
         <h1 className="text-2xl font-bold text-center mb-1" style={{ color: 'var(--boccea-red)' }}>
           Fantacalcio Boccea
         </h1>
-        <p className="text-center text-gray-500 text-sm mb-6">Asta 2025/26</p>
+        <p className="text-center text-gray-500 text-sm mb-6">Asta 2026/27</p>
         <form onSubmit={handleLogin} className="space-y-3">
           <input
             type="email"
