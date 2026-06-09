@@ -11,14 +11,17 @@ export default async function DashboardPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
-  if (user.user_metadata?.role === 'admin') redirect('/admin')
+  const isAdmin = user.user_metadata?.role === 'admin'
 
   const [{ data: team }, { data: config }] = await Promise.all([
     supabase.from('teams').select('*').eq('user_id', user.id).single(),
     supabase.from('config').select('*').eq('id', 1).single(),
   ])
 
-  if (!team) return <p className="p-4">Squadra non trovata. Contatta l&apos;admin.</p>
+  if (!team) {
+    if (isAdmin) redirect('/admin')
+    return <p className="p-4">Squadra non trovata. Contatta l&apos;admin.</p>
+  }
 
   const [{ data: soldPlayers }, { data: activeAuctions }, { data: allPlayers }] = await Promise.all([
     supabase.from('players').select('*').eq('sold_to_team_id', team.id),
@@ -71,7 +74,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--background)' }}>
-      <BudgetHeader team={team} rosterCount={rosterCount} rosterMin={25} rosterMax={28} />
+      <BudgetHeader team={team} rosterCount={rosterCount} rosterMin={25} rosterMax={28} isAdmin={isAdmin} />
       <main className="max-w-2xl mx-auto p-4 space-y-4">
         {config?.enabled_roles?.length ? (
           <p className="text-xs text-center text-gray-400">

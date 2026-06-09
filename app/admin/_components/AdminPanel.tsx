@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import Link from 'next/link'
 import { AdminSidebar } from './AdminSidebar'
 import { ImportSection } from './ImportSection'
 import { RolesSection } from './RolesSection'
@@ -30,9 +31,17 @@ export default function AdminPanel({ config, teams, auctions }: Props) {
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--background)' }}>
-      <header className="text-white px-6 py-3 flex items-center gap-3 shadow-md" style={{ background: 'var(--boccea-red)' }}>
-        <span className="text-xl">⚙️</span>
-        <h1 className="font-bold text-lg">Admin — Fantacalcio Boccea</h1>
+      <header className="text-white px-6 py-3 flex items-center justify-between shadow-md" style={{ background: 'var(--boccea-red)' }}>
+        <div className="flex items-center gap-3">
+          <span className="text-xl">⚙️</span>
+          <h1 className="font-bold text-lg">Admin — Fantacalcio Boccea</h1>
+        </div>
+        <Link
+          href="/dashboard"
+          className="text-xs px-3 py-1.5 rounded border border-white/40 text-white/80 hover:bg-white/10 transition-colors"
+        >
+          ← Dashboard
+        </Link>
       </header>
       <div className="flex gap-6 p-6 max-w-5xl mx-auto">
         <AdminSidebar active={active} onChange={setActive} />
