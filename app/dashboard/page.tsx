@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { BudgetHeader } from './_components/BudgetHeader'
 import { AuctionList } from './_components/AuctionList'
+import { LaunchAuction } from './_components/LaunchAuction'
 import type { AuctionWithPlayer } from '@/lib/supabase/types'
 
 export default async function DashboardPage() {
@@ -46,6 +47,7 @@ export default async function DashboardPage() {
             : 'Nessun ruolo abilitato — aspetta l\'admin'}
         </p>
         <AuctionList initialAuctions={(activeAuctions ?? []) as AuctionWithPlayer[]} currentTeam={team} />
+        {config && <LaunchAuction config={config} />}
       </main>
     </div>
   )
