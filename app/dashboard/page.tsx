@@ -10,6 +10,7 @@ export default async function DashboardPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
+  if (user.user_metadata?.role === 'admin') redirect('/admin')
 
   const [{ data: team }, { data: config }] = await Promise.all([
     supabase.from('teams').select('*').eq('user_id', user.id).single(),
