@@ -82,7 +82,7 @@ export function TeamsSection({ teams: initialTeams }: Props) {
                 defaultValue={t.budget_remaining}
                 onBlur={e => {
                   const v = parseInt(e.target.value)
-                  if (!isNaN(v) && v !== t.budget_remaining) handleBudgetChange(t.id, v)
+                  if (!isNaN(v) && v >= 0 && v !== t.budget_remaining) handleBudgetChange(t.id, v)
                 }}
                 className="w-20 border rounded px-2 py-1 text-sm text-right"
               />

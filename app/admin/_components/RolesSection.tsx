@@ -17,7 +17,7 @@ export function RolesSection({ config }: Props) {
     supabase.rpc('get_distinct_roles').then(({ data }) => {
       if (data) setAvailableRoles(data as string[])
     })
-  }, [supabase])
+  }, [])
 
   function toggle(role: string) {
     setEnabled(prev =>

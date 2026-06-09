@@ -23,6 +23,7 @@ export function ImportSection() {
         else setResult(r)
       })
     }
+    reader.onerror = () => setError('Errore lettura file')
     reader.readAsArrayBuffer(file)
   }
 
