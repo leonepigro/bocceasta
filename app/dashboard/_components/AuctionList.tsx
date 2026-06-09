@@ -13,6 +13,11 @@ export function AuctionList({ initialAuctions, currentTeam }: Props) {
   const [auctions, setAuctions] = useState<AuctionWithPlayer[]>(initialAuctions)
   const supabase = createClient()
 
+  // Sync when server re-renders pass new initialAuctions (after router.refresh())
+  useEffect(() => {
+    setAuctions(initialAuctions)
+  }, [initialAuctions])
+
   useEffect(() => {
     async function fetchAuctions() {
       const { data } = await supabase
