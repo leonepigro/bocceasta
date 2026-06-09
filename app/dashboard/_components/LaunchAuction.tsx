@@ -83,7 +83,7 @@ export function LaunchAuction({ config }: Props) {
             type="number"
             min={1}
             value={initialBid}
-            onChange={e => setInitialBid(parseInt(e.target.value))}
+            onChange={e => setInitialBid(parseInt(e.target.value) || 1)}
             className="w-24 border rounded-lg px-3 py-2 text-sm"
           />
           <button

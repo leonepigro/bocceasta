@@ -86,7 +86,7 @@ export function AuctionCard({ auction, currentTeam }: Props) {
             min={auction.current_price + 1}
             max={currentTeam.budget_remaining}
             value={bidAmount}
-            onChange={e => setBidAmount(parseInt(e.target.value))}
+            onChange={e => setBidAmount(parseInt(e.target.value) || auction.current_price + 1)}
             className="flex-1 border rounded-lg px-3 py-1.5 text-sm"
           />
           <button
