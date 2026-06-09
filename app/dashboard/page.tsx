@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { BudgetHeader } from './_components/BudgetHeader'
+import { AuctionList } from './_components/AuctionList'
+import type { AuctionWithPlayer } from '@/lib/supabase/types'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -14,10 +16,18 @@ export default async function DashboardPage() {
 
   if (!team) return <p className="p-4">Squadra non trovata. Contatta l&apos;admin.</p>
 
-  const { data: soldPlayers } = await supabase
-    .from('players')
-    .select('*')
-    .eq('sold_to_team_id', team.id)
+  const [{ data: soldPlayers }, { data: activeAuctions }] = await Promise.all([
+    supabase.from('players').select('*').eq('sold_to_team_id', team.id),
+    supabase
+      .from('auctions')
+      .select(`
+        *,
+        players ( id, name, serie_a_team, roles, fvm ),
+        teams_winner:teams!auctions_current_winner_team_id_fkey ( id, team_name )
+      `)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false }),
+  ])
 
   const rosterCount = soldPlayers?.length ?? 0
 
@@ -35,6 +45,7 @@ export default async function DashboardPage() {
             ? `Ruoli abilitati: ${config.enabled_roles.join(', ')}`
             : 'Nessun ruolo abilitato — aspetta l\'admin'}
         </p>
+        <AuctionList initialAuctions={(activeAuctions ?? []) as AuctionWithPlayer[]} currentTeam={team} />
       </main>
     </div>
   )
