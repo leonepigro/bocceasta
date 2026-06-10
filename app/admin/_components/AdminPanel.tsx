@@ -8,9 +8,10 @@ import { ConfigSection } from './ConfigSection'
 import { AuctionsSection } from './AuctionsSection'
 import { TeamsSection } from './TeamsSection'
 import { ExportSection } from './ExportSection'
+import { FantacalcioSection } from './FantacalcioSection'
 import type { Config, Team } from '@/lib/supabase/types'
 
-type Section = 'import' | 'roles' | 'config' | 'auctions' | 'teams' | 'export'
+type Section = 'import' | 'roles' | 'config' | 'auctions' | 'teams' | 'export' | 'fantacalcio'
 
 type AuctionRow = {
   id: string
@@ -52,6 +53,7 @@ export default function AdminPanel({ config, teams, auctions }: Props) {
           {active === 'auctions' && <AuctionsSection auctions={auctions} />}
           {active === 'teams' && <TeamsSection teams={teams} />}
           {active === 'export' && <ExportSection />}
+          {active === 'fantacalcio' && <FantacalcioSection teams={teams} />}
         </main>
       </div>
     </div>

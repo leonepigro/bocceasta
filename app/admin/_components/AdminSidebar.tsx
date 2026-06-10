@@ -1,6 +1,6 @@
 'use client'
 
-type Section = 'import' | 'roles' | 'config' | 'auctions' | 'teams' | 'export'
+type Section = 'import' | 'roles' | 'config' | 'auctions' | 'teams' | 'export' | 'fantacalcio'
 
 type Props = {
   active: Section
@@ -13,7 +13,8 @@ const sections: { id: Section; label: string }[] = [
   { id: 'config', label: 'Configurazione' },
   { id: 'auctions', label: 'Aste attive' },
   { id: 'teams', label: 'Squadre' },
-  { id: 'export', label: 'Export' },
+  { id: 'export', label: 'Export CSV' },
+  { id: 'fantacalcio', label: '⚽ Fantacalcio.it' },
 ]
 
 export function AdminSidebar({ active, onChange }: Props) {
