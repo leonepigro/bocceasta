@@ -12,8 +12,8 @@ export function parsePlayersXlsx(buffer: Buffer | ArrayBuffer): PlayerImport[] {
   const headerRow = (rows[1] ?? []).map(h => String(h ?? '').trim().toLowerCase())
 
   // Trova colonne per nome — fallback agli indici storici
-  const colFvm = headerRow.findIndex(h => h === 'fvm') !== -1
-    ? headerRow.findIndex(h => h === 'fvm')
+  const colFvm = headerRow.findIndex(h => h === 'fvm' || h === 'qt.a m' || h === 'qt.a') !== -1
+    ? headerRow.findIndex(h => h === 'fvm' || h === 'qt.a m' || h === 'qt.a')
     : 11
   const colId   = headerRow.findIndex(h => h === 'id') !== -1 ? headerRow.findIndex(h => h === 'id') : 0
   const colR    = headerRow.findIndex(h => h === 'r')  !== -1 ? headerRow.findIndex(h => h === 'r')  : 1
