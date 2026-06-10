@@ -1,6 +1,7 @@
 'use client'
 import { useState, useTransition, useMemo } from 'react'
 import { addTarget, removeTarget, updateTargetPrice } from '@/lib/mantra/actions'
+import { ALL_ROLES } from '@/lib/mantra/formations'
 
 type PlayerRow = {
   id: number
@@ -32,7 +33,7 @@ export function TargetList({ allPlayers, initialTargets, budget }: Props) {
   const [isPending, startTransition] = useTransition()
   const [tab, setTab] = useState<'targets' | 'search'>('targets')
 
-  const ROLES = ['P', 'DC', 'B', 'DD', 'DS', 'E', 'M', 'C', 'T', 'W', 'A', 'PC']
+  const ROLES = ALL_ROLES
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
