@@ -9,6 +9,27 @@ type Props = {
   freePlayers: PlayerNode[]
 }
 
+const ROLE_COLOR: Record<string, string> = {
+  Por: '#f59e0b',
+  Dc: '#3b82f6', B: '#3b82f6',
+  Dd: '#60a5fa', Ds: '#60a5fa',
+  E: '#06b6d4',
+  M: '#10b981', C: '#10b981',
+  T: '#8b5cf6', W: '#8b5cf6',
+  A: '#ef4444', Pc: '#ef4444',
+}
+
+function roleColor(roles: string[]): string {
+  return ROLE_COLOR[roles[0]] ?? '#9ca3af'
+}
+
+function pvColor(pv: number | null): string {
+  if (pv === null) return '#9ca3af'
+  if (pv >= 29) return '#10b981'
+  if (pv >= 19) return '#f59e0b'
+  return '#ef4444'
+}
+
 export function FormationAnalysis({ rosterPlayers, freePlayers }: Props) {
   const [selected, setSelected] = useState<string | null>(null)
 
@@ -18,7 +39,7 @@ export function FormationAnalysis({ rosterPlayers, freePlayers }: Props) {
   )
 
   const best = results[0]
-  const selectedResult = selected ? results.find(r => r.formation.name === selected) ?? best : best
+  const selectedResult = results.find(r => r.formation.name === (selected ?? best.formation.name)) ?? best
 
   const suggestions = useMemo(
     () => suggestForMissing(selectedResult.missingSlots, freePlayers),
@@ -27,8 +48,8 @@ export function FormationAnalysis({ rosterPlayers, freePlayers }: Props) {
 
   return (
     <div className="space-y-4">
-      {/* Griglia moduli */}
-      <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4">
+      {/* Selezione modulo — griglia compatta */}
+      <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6">
         {results.map(r => {
           const pct = (r.filled / 11) * 100
           const color = pct === 100 ? '#10b981' : pct >= 82 ? '#f59e0b' : '#ef4444'
@@ -37,88 +58,122 @@ export function FormationAnalysis({ rosterPlayers, freePlayers }: Props) {
             <button
               key={r.formation.name}
               onClick={() => setSelected(r.formation.name)}
-              className={`rounded-lg p-2 text-left border transition-all ${isSelected ? '' : 'hover:bg-gray-50'}`}
-              style={{ borderColor: isSelected ? color : '#e5e7eb', outline: isSelected ? `2px solid ${color}` : 'none' }}
+              className="rounded-lg p-2 text-left border transition-all hover:bg-gray-50"
+              style={{
+                borderColor: isSelected ? color : '#e5e7eb',
+                outline: isSelected ? `2px solid ${color}` : 'none',
+                outlineOffset: '1px',
+              }}
             >
-              <p className="text-xs font-bold">{r.formation.name}</p>
-              <p className="text-lg font-black leading-tight" style={{ color }}>
+              <p className="text-[11px] font-bold text-gray-700 leading-tight">{r.formation.name}</p>
+              <p className="text-sm font-black leading-tight mt-0.5" style={{ color }}>
                 {r.filled}/11
               </p>
-              <div className="w-full bg-gray-100 rounded-full h-1 mt-1">
-                <div className="h-1 rounded-full" style={{ width: `${pct}%`, background: color }} />
-              </div>
             </button>
           )
         })}
       </div>
 
       {/* Dettaglio modulo selezionato */}
-      <div className="border rounded-lg p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="font-semibold">{selectedResult.formation.name}</h3>
-          <span className="text-sm text-gray-500">
+      <div className="border rounded-xl overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3" style={{ background: 'var(--boccea-red)' }}>
+          <span className="text-white font-bold text-base">{selectedResult.formation.name}</span>
+          <span className="text-white/80 text-sm font-medium">
             {selectedResult.filled}/11 slot coperti
           </span>
         </div>
 
-        {/* Slot */}
-        <div className="flex flex-wrap gap-1.5">
+        {/* Slot list */}
+        <div className="divide-y">
           {selectedResult.formation.slots.map((slot, i) => {
-            const filled = selectedResult.slotToPlayer[i] !== null
-            const player = filled ? rosterPlayers[selectedResult.slotToPlayer[i]!] : null
+            const playerIdx = selectedResult.slotToPlayer[i]
+            const player = playerIdx !== null ? rosterPlayers[playerIdx] : null
+            const color = roleColor(slot.roles)
+
             return (
               <div
                 key={i}
-                className={`text-xs px-2 py-1 rounded-full font-medium flex items-center gap-1 ${filled ? 'text-white' : 'bg-red-50 text-red-600 border border-red-200'}`}
-                style={filled ? { background: 'var(--boccea-red)' } : undefined}
-                title={player ? `${player.name}${player.presenze != null ? ` · ${player.presenze} presenze` : ''}` : undefined}
+                className={`flex items-center gap-3 px-4 py-2.5 ${!player ? 'bg-red-50' : ''}`}
               >
-                <span>{slot.label}</span>
+                {/* Role badge */}
+                <span
+                  className="text-white text-xs font-bold px-2 py-0.5 rounded w-14 text-center flex-shrink-0"
+                  style={{ background: player ? color : '#ef4444' }}
+                >
+                  {slot.label}
+                </span>
+
+                {/* Player name */}
+                <div className="flex-1 min-w-0">
+                  {player ? (
+                    <p className="text-sm font-semibold text-gray-800 truncate">{player.name}</p>
+                  ) : (
+                    <p className="text-sm text-red-400 italic">slot scoperto</p>
+                  )}
+                </div>
+
+                {/* Presenze */}
                 {player && (
-                  <>
-                    <span className="opacity-75 truncate max-w-[55px]">{player.name.split(' ').pop()}</span>
-                    {player.presenze != null && (
-                      <span
-                        className="text-white/70 text-[10px] font-normal"
-                        style={{ color: player.presenze >= 29 ? '#86efac' : player.presenze >= 19 ? '#fde68a' : '#fca5a5' }}
-                      >
-                        {player.presenze}
-                      </span>
-                    )}
-                  </>
+                  <div className="flex-shrink-0 flex items-center gap-1.5">
+                    <div className="w-12 bg-gray-100 rounded-full h-1.5">
+                      <div
+                        className="h-1.5 rounded-full"
+                        style={{
+                          width: `${player.presenze != null ? Math.min(100, (player.presenze / 38) * 100) : 0}%`,
+                          background: pvColor(player.presenze),
+                        }}
+                      />
+                    </div>
+                    <span
+                      className="text-sm font-bold w-6 text-right"
+                      style={{ color: pvColor(player.presenze) }}
+                    >
+                      {player.presenze ?? '—'}
+                    </span>
+                  </div>
                 )}
               </div>
             )
           })}
         </div>
 
-        {/* Suggerimenti per slot mancanti */}
-        {suggestions.length > 0 && (
-          <div className="space-y-2 pt-2 border-t">
-            <p className="text-xs font-semibold text-red-600">Slot scoperti — suggerimenti svincolati:</p>
-            {suggestions.map(({ slot, suggestions: sugg }) => (
-              <div key={slot.label} className="text-xs">
-                <span className="font-medium bg-red-100 text-red-700 px-1.5 py-0.5 rounded mr-2">
-                  {slot.label}
-                </span>
-                {sugg.length === 0 ? (
-                  <span className="text-gray-400">Nessuno disponibile</span>
-                ) : (
-                  sugg.map(p => (
-                    <span key={p.id} className="mr-3 text-gray-700">
-                      {p.name}
-                      <span className="text-gray-400 ml-1">FVM {p.fvm ?? '—'}</span>
+        {/* Footer */}
+        <div className="px-4 py-3 bg-gray-50 border-t">
+          {selectedResult.filled === 11 ? (
+            <p className="text-xs text-green-600 font-semibold">✓ Modulo completamente coperto dalla rosa</p>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-red-600">Slot scoperti — migliori svincolati disponibili:</p>
+              {suggestions.map(({ slot, suggestions: sugg }) => (
+                <div key={slot.label} className="text-xs flex items-start gap-2">
+                  <span
+                    className="text-white font-bold px-1.5 py-0.5 rounded flex-shrink-0"
+                    style={{ background: roleColor(slot.roles) }}
+                  >
+                    {slot.label}
+                  </span>
+                  {sugg.length === 0 ? (
+                    <span className="text-gray-400 italic">nessuno disponibile</span>
+                  ) : (
+                    <span className="text-gray-700">
+                      {sugg.map((p, j) => (
+                        <span key={p.id}>
+                          {p.name}
+                          <span className="text-gray-400 ml-0.5">
+                            FVM {p.fvm ?? '—'}
+                            {p.presenze != null && <span style={{ color: pvColor(p.presenze) }}> ({p.presenze}pv)</span>}
+                          </span>
+                          {j < sugg.length - 1 && <span className="text-gray-300 mx-1">·</span>}
+                        </span>
+                      ))}
                     </span>
-                  ))
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {selectedResult.filled === 11 && (
-          <p className="text-xs text-green-600 font-semibold">✓ Modulo completamente coperto dalla rosa</p>
-        )}
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
