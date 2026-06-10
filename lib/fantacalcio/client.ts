@@ -50,9 +50,11 @@ export async function login(): Promise<string> {
   try { data = JSON.parse(text) } catch { throw new Error(`Login: risposta non JSON — ${text.slice(0, 200)}`) }
 
   // Struttura attesa: { utente: { utente_token } } oppure { data: { utente_token } } o simile
+  const inner = data?.data as Record<string, unknown> | undefined
   const token =
+    (inner?.utente as Record<string, unknown>)?.utente_token ??
     (data?.utente as Record<string, unknown>)?.utente_token ??
-    (data?.data as Record<string, unknown>)?.utente_token ??
+    inner?.utente_token ??
     data?.utente_token ??
     data?.token
 
