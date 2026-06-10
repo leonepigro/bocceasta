@@ -33,16 +33,16 @@ export default async function PlannerPage({
   const selectedLeagueId = params.league ?? leagues?.[0]?.id ?? null
 
   // Giocatori della lega selezionata
-  let leaguePlayers: { id: number; name: string; roles: string[]; fvm: number | null }[] = []
+  let leaguePlayers: { id: number; name: string; roles: string[]; fvm: number | null; presenze: number | null }[] = []
   if (selectedLeagueId) {
     const { data: lp } = await supabase
       .from('my_league_players')
-      .select('players(id, name, roles, fvm)')
+      .select('players(id, name, roles, fvm, presenze)')
       .eq('league_id', selectedLeagueId)
     leaguePlayers = (lp ?? [])
       .map(r => {
         const p = Array.isArray(r.players) ? r.players[0] : r.players
-        return p ? { id: p.id, name: p.name, roles: p.roles ?? [], fvm: p.fvm } : null
+        return p ? { id: p.id, name: p.name, roles: p.roles ?? [], fvm: p.fvm, presenze: p.presenze ?? null } : null
       })
       .filter(Boolean) as typeof leaguePlayers
   }
@@ -50,7 +50,7 @@ export default async function PlannerPage({
   // Tutti i giocatori liberi (non in nessuna my_league_players per la lega selezionata)
   const { data: allPlayersRaw } = await supabase
     .from('players')
-    .select('id, name, serie_a_team, roles, fvm, is_sold')
+    .select('id, name, serie_a_team, roles, fvm, presenze, is_sold')
     .order('name')
 
   const { data: activeAuctions } = await supabase
@@ -67,7 +67,7 @@ export default async function PlannerPage({
 
   const freePlayers = (allPlayersRaw ?? [])
     .filter(p => !p.is_sold && !leaguePlayerIds.has(p.id) && !activePlayerIds.has(p.id))
-    .map(p => ({ id: p.id, name: p.name, roles: p.roles ?? [], fvm: p.fvm }))
+    .map(p => ({ id: p.id, name: p.name, roles: p.roles ?? [], fvm: p.fvm, presenze: (p as { presenze?: number | null }).presenze ?? null }))
 
   const allPlayersForTarget = (allPlayersRaw ?? []).map(p => ({
     id: p.id,

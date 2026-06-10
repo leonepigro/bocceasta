@@ -14,6 +14,7 @@ export type Player = {
   roles: string[]
   classic_role: string | null
   fvm: number | null
+  presenze: number | null
   is_sold: boolean
   sold_to_team_id: string | null
   sold_price: number | null
@@ -78,4 +79,5 @@ export type PlayerImport = {
   roles: string[]
   classic_role: string | null
   fvm: number | null
+  presenze: number | null
 }

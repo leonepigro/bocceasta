@@ -5,6 +5,7 @@ import { LeagueSelector } from './LeagueSelector'
 import { FormationAnalysis } from './FormationAnalysis'
 import { BudgetPlanner } from './BudgetPlanner'
 import { TargetList } from './TargetList'
+import { RoleBreakdown } from './RoleBreakdown'
 import type { PlayerNode } from '@/lib/mantra/matcher'
 
 type League = { id: string; name: string; csv_team_name: string; created_at: string }
@@ -59,12 +60,18 @@ export function PlannerClient({
       {leaguePlayers.length > 0 ? (
         <>
           <section>
+            <h2 className="text-base font-bold mb-1">📊 Rosa per ruolo</h2>
+            <p className="text-xs text-gray-400 mb-3">
+              {selectedLeague?.name} · {selectedLeague?.csv_team_name} · {leaguePlayers.length} giocatori · presenze su 38 giornate
+            </p>
+            <RoleBreakdown players={leaguePlayers} totalMatchdays={38} />
+          </section>
+
+          <section>
             <h2 className="text-base font-bold mb-1 flex items-center gap-2">
               ⚽ Analisi moduli Mantra
             </h2>
-            <p className="text-xs text-gray-400 mb-3">
-              {selectedLeague?.name} · {selectedLeague?.csv_team_name} · {leaguePlayers.length} giocatori
-            </p>
+            <p className="text-xs text-gray-400 mb-3">Slot colorati: verde ≥29, giallo ≥19, rosso &lt;19 presenze</p>
             <FormationAnalysis rosterPlayers={leaguePlayers} freePlayers={freePlayers} />
           </section>
 

@@ -20,10 +20,12 @@ export function parsePlayersXlsx(buffer: Buffer | ArrayBuffer): PlayerImport[] {
     const name = row[3] ? String(row[3]) : ''
     const serieATeam = row[4] ? String(row[4]) : null
     const fvm = typeof row[11] === 'number' ? row[11] : null
+    // Col 5 = Pv (Partite al voto)
+    const presenze = typeof row[5] === 'number' ? row[5] : null
 
     if (!name) continue
 
-    players.push({ id, name, serie_a_team: serieATeam, roles, classic_role: classicRole, fvm })
+    players.push({ id, name, serie_a_team: serieATeam, roles, classic_role: classicRole, fvm, presenze })
   }
 
   return players

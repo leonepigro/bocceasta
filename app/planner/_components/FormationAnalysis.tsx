@@ -69,12 +69,24 @@ export function FormationAnalysis({ rosterPlayers, freePlayers }: Props) {
             return (
               <div
                 key={i}
-                className={`text-xs px-2 py-1 rounded-full font-medium ${filled ? 'text-white' : 'bg-red-50 text-red-600 border border-red-200'}`}
+                className={`text-xs px-2 py-1 rounded-full font-medium flex items-center gap-1 ${filled ? 'text-white' : 'bg-red-50 text-red-600 border border-red-200'}`}
                 style={filled ? { background: 'var(--boccea-red)' } : undefined}
-                title={player?.name}
+                title={player ? `${player.name}${player.presenze != null ? ` · ${player.presenze} presenze` : ''}` : undefined}
               >
-                {slot.label}
-                {player && <span className="opacity-75 ml-1 truncate max-w-[60px] inline-block align-middle">{player.name.split(' ').pop()}</span>}
+                <span>{slot.label}</span>
+                {player && (
+                  <>
+                    <span className="opacity-75 truncate max-w-[55px]">{player.name.split(' ').pop()}</span>
+                    {player.presenze != null && (
+                      <span
+                        className="text-white/70 text-[10px] font-normal"
+                        style={{ color: player.presenze >= 29 ? '#86efac' : player.presenze >= 19 ? '#fde68a' : '#fca5a5' }}
+                      >
+                        {player.presenze}
+                      </span>
+                    )}
+                  </>
+                )}
               </div>
             )
           })}

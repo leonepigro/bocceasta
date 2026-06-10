@@ -5,6 +5,7 @@ export type PlayerNode = {
   name: string
   roles: string[]
   fvm: number | null
+  presenze: number | null
 }
 
 export type FormationResult = {
