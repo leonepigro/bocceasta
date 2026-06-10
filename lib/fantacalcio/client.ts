@@ -62,19 +62,20 @@ export async function login(): Promise<string> {
   return token as string
 }
 
-// Recupera la lega con alias_lega = fantacalcio-boccea
-export async function getLeague(userToken: string): Promise<{ league: FcLeague; teams: FcTeam[]; participants: FcParticipant[] }> {
-  const alias = process.env.FANTACALCIO_ALIAS ?? 'fantacalcio-boccea'
+// Recupera lista leghe dell'utente
+export async function fetchLeagues(userToken: string): Promise<FcLeague[]> {
+  const res = await fetch(`${APP_BASE}/v1/v1_utente/profilo?app_key=${APP_KEY}&user_token=${userToken}`)
+  if (!res.ok) throw new Error('Recupero profilo fallito')
+  const profile = await res.json()
+  const leghe = profile?.data?.leghe ?? profile?.leghe ?? []
+  return leghe as FcLeague[]
+}
 
-  // Profilo utente → lista leghe
-  const profileRes = await fetch(
-    `${APP_BASE}/v1/v1_utente/profilo?app_key=${APP_KEY}&user_token=${userToken}`
-  )
-  if (!profileRes.ok) throw new Error('Recupero profilo fallito')
-  const profile = await profileRes.json()
-
-  const league: FcLeague = profile.leghe?.find((l: FcLeague) => l.alias === alias)
-  if (!league) throw new Error(`Lega "${alias}" non trovata nel profilo`)
+// Recupera squadre e partecipanti di una lega specifica
+export async function getLeague(userToken: string, alias: string): Promise<{ league: FcLeague; teams: FcTeam[]; participants: FcParticipant[] }> {
+  const leagues = await fetchLeagues(userToken)
+  const league = leagues.find((l: FcLeague) => l.alias === alias)
+  if (!league) throw new Error(`Lega "${alias}" non trovata`)
 
   // Squadre con rose
   const teamsRes = await fetch(

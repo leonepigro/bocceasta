@@ -1,7 +1,7 @@
 'use server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { createClient } from '@/lib/supabase/server'
-import { login, getLeague } from './client'
+import { login, fetchLeagues, getLeague } from './client'
 import { revalidatePath } from 'next/cache'
 
 async function assertAdmin() {
@@ -10,31 +10,43 @@ async function assertAdmin() {
   if (!user || user.user_metadata?.role !== 'admin') throw new Error('Unauthorized')
 }
 
-export async function syncFromFantacalcio() {
-  await assertAdmin()
-
+function checkEnv() {
   const missing = ['FANTACALCIO_APP_KEY', 'FANTACALCIO_USERNAME', 'FANTACALCIO_PASSWORD']
     .filter(k => !process.env[k])
-  if (missing.length) return { error: `Variabili mancanti: ${missing.join(', ')}` }
+  if (missing.length) throw new Error(`Variabili mancanti: ${missing.join(', ')}`)
+}
 
+// Step 0: login + lista leghe
+export async function loginAndGetLeagues() {
+  await assertAdmin()
   try {
+    checkEnv()
     const token = await login()
-    const { league, teams, participants } = await getLeague(token)
-
+    const leagues = await fetchLeagues(token)
     return {
       success: true,
-      league: { nome: league.nome, alias: league.alias, tipo: league.tipo },
+      token,
+      leagues: leagues.map(l => ({ id: l.id, nome: l.nome, alias: l.alias, tipo: l.tipo })),
+    }
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Errore sconosciuto' }
+  }
+}
+
+// Step 1: carica squadre di una lega selezionata
+export async function syncFromFantacalcio(userToken: string, leagueAlias: string) {
+  await assertAdmin()
+  try {
+    checkEnv()
+    const { league, teams } = await getLeague(userToken, leagueAlias)
+    return {
+      success: true,
+      league: { nome: league.nome, alias: league.alias, token: league.token, tipo: league.tipo },
       teams: teams.map(t => ({
         id: t.id,
         nome: t.nome,
         email: t.presidente?.email ?? null,
         calciatori: t.calciatori?.length ?? 0,
-      })),
-      participants: participants.map(p => ({
-        id: p.id,
-        username: p.username,
-        email: p.email,
-        ruolo: p.ruolo,
       })),
     }
   } catch (e: unknown) {
@@ -42,17 +54,11 @@ export async function syncFromFantacalcio() {
   }
 }
 
-export async function pushRostersToFantacalcio() {
+export async function pushRostersToFantacalcio(leagueAlias: string, leagueToken: string) {
   await assertAdmin()
-
-  const missing = ['FANTACALCIO_APP_KEY', 'FANTACALCIO_USERNAME', 'FANTACALCIO_PASSWORD']
-    .filter(k => !process.env[k])
-  if (missing.length) return { error: `Variabili mancanti: ${missing.join(', ')}` }
-
   try {
+    checkEnv()
     const service = await createServiceClient()
-
-    // Giocatori venduti con squadra e team fantacalcio id
     const { data: sold, error } = await service
       .from('players')
       .select('id, sold_price, teams!players_sold_to_team_id_fkey(fc_team_id)')
@@ -61,8 +67,6 @@ export async function pushRostersToFantacalcio() {
     if (!sold?.length) return { error: 'Nessun giocatore venduto da esportare' }
 
     const token = await login()
-    const { league } = await getLeague(token)
-
     const { buyPlayer } = await import('./client')
     let ok = 0
     const errors: string[] = []
@@ -72,7 +76,7 @@ export async function pushRostersToFantacalcio() {
       const fcTeamId = (team as { fc_team_id: number | null })?.fc_team_id
       if (!fcTeamId) { errors.push(`Giocatore ${p.id}: fc_team_id mancante`); continue }
       try {
-        await buyPlayer(token, league.alias, league.token, fcTeamId, p.id, p.sold_price ?? 1)
+        await buyPlayer(token, leagueAlias, leagueToken, fcTeamId, p.id, p.sold_price ?? 1)
         ok++
       } catch (e: unknown) {
         errors.push(`Giocatore ${p.id}: ${e instanceof Error ? e.message : 'errore'}`)
@@ -89,7 +93,6 @@ export async function pushRostersToFantacalcio() {
 export async function saveFcTeamMapping(mappings: { teamId: string; fcTeamId: number }[]) {
   await assertAdmin()
   const service = await createServiceClient()
-
   for (const m of mappings) {
     await service.from('teams').update({ fc_team_id: m.fcTeamId }).eq('id', m.teamId)
   }
