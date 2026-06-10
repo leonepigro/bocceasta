@@ -62,16 +62,16 @@ export function PlannerClient({
           <section>
             <h2 className="text-base font-bold mb-1">📊 Rosa per ruolo</h2>
             <p className="text-xs text-gray-400 mb-3">
-              {selectedLeague?.name} · {selectedLeague?.csv_team_name} · {leaguePlayers.length} giocatori · presenze su 38 giornate
+              {selectedLeague?.name} · {selectedLeague?.csv_team_name} · {leaguePlayers.length} giocatori · ordinati per quotazione
             </p>
-            <RoleBreakdown players={leaguePlayers} totalMatchdays={38} />
+            <RoleBreakdown players={leaguePlayers} />
           </section>
 
           <section>
             <h2 className="text-base font-bold mb-1 flex items-center gap-2">
               ⚽ Analisi moduli Mantra
             </h2>
-            <p className="text-xs text-gray-400 mb-3">Slot colorati: verde ≥29, giallo ≥19, rosso &lt;19 presenze</p>
+            <p className="text-xs text-gray-400 mb-3">Il numero a destra di ogni slot è la quotazione FVM</p>
             <FormationAnalysis rosterPlayers={leaguePlayers} freePlayers={freePlayers} />
           </section>
 

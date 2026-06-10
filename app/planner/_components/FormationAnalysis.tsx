@@ -23,12 +23,6 @@ function roleColor(roles: string[]): string {
   return ROLE_COLOR[roles[0]] ?? '#9ca3af'
 }
 
-function pvColor(pv: number | null): string {
-  if (pv === null) return '#9ca3af'
-  if (pv >= 29) return '#10b981'
-  if (pv >= 19) return '#f59e0b'
-  return '#ef4444'
-}
 
 export function FormationAnalysis({ rosterPlayers, freePlayers }: Props) {
   const [selected, setSelected] = useState<string | null>(null)
@@ -113,25 +107,11 @@ export function FormationAnalysis({ rosterPlayers, freePlayers }: Props) {
                   )}
                 </div>
 
-                {/* Presenze */}
-                {player && (
-                  <div className="flex-shrink-0 flex items-center gap-1.5">
-                    <div className="w-12 bg-gray-100 rounded-full h-1.5">
-                      <div
-                        className="h-1.5 rounded-full"
-                        style={{
-                          width: `${player.presenze != null ? Math.min(100, (player.presenze / 38) * 100) : 0}%`,
-                          background: pvColor(player.presenze),
-                        }}
-                      />
-                    </div>
-                    <span
-                      className="text-sm font-bold w-6 text-right"
-                      style={{ color: pvColor(player.presenze) }}
-                    >
-                      {player.presenze ?? '—'}
-                    </span>
-                  </div>
+                {/* FVM */}
+                {player && player.fvm != null && (
+                  <span className="flex-shrink-0 text-sm font-bold text-gray-400">
+                    {player.fvm}
+                  </span>
                 )}
               </div>
             )
@@ -162,8 +142,7 @@ export function FormationAnalysis({ rosterPlayers, freePlayers }: Props) {
                           {p.name}
                           <span className="text-gray-400 ml-0.5">
                             FVM {p.fvm ?? '—'}
-                            {p.presenze != null && <span style={{ color: pvColor(p.presenze) }}> ({p.presenze}pv)</span>}
-                          </span>
+                            </span>
                           {j < sugg.length - 1 && <span className="text-gray-300 mx-1">·</span>}
                         </span>
                       ))}
