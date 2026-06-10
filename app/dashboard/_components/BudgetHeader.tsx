@@ -31,6 +31,12 @@ export function BudgetHeader({ team, rosterCount, rosterMin, rosterMax, isAdmin 
             Rosa: {rosterCount} / {rosterMin}-{rosterMax}
           </p>
         </div>
+        <Link
+          href="/planner"
+          className="text-xs px-2 py-1 rounded border border-white/40 text-white/80 hover:bg-white/10 transition-colors"
+        >
+          🎯 Planner
+        </Link>
         {isAdmin && (
           <Link
             href="/admin"

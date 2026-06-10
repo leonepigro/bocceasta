@@ -63,6 +63,14 @@ export type RosterRequirement = {
   max_count: number
 }
 
+export type Target = {
+  id: string
+  team_id: string
+  player_id: number
+  max_price: number
+  created_at: string
+}
+
 export type PlayerImport = {
   id: number
   name: string
