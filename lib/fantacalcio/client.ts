@@ -44,9 +44,20 @@ export async function login(): Promise<string> {
     headers: headers(),
     body: JSON.stringify({ username, password }),
   })
-  if (!res.ok) throw new Error(`Login fallito: ${res.status}`)
-  const data = await res.json()
-  return data.utente.utente_token
+  const text = await res.text()
+  if (!res.ok) throw new Error(`Login fallito: ${res.status} — ${text}`)
+  let data: Record<string, unknown>
+  try { data = JSON.parse(text) } catch { throw new Error(`Login: risposta non JSON — ${text.slice(0, 200)}`) }
+
+  // Struttura attesa: { utente: { utente_token } } oppure { data: { utente_token } } o simile
+  const token =
+    (data?.utente as Record<string, unknown>)?.utente_token ??
+    (data?.data as Record<string, unknown>)?.utente_token ??
+    data?.utente_token ??
+    data?.token
+
+  if (!token) throw new Error(`Login: token non trovato nella risposta — ${JSON.stringify(data).slice(0, 300)}`)
+  return token as string
 }
 
 // Recupera la lega con alias_lega = fantacalcio-boccea
