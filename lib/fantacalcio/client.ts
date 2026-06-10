@@ -1,7 +1,6 @@
 const APP_BASE = 'https://appleghe.fantacalcio.it/api'
 
 const APP_KEY = process.env.FANTACALCIO_APP_KEY!
-const WEB_KEY = process.env.FANTACALCIO_WEB_KEY!
 
 function headers(extra: Record<string, string> = {}) {
   return {
