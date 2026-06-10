@@ -65,9 +65,19 @@ export async function login(): Promise<string> {
 // Recupera lista leghe dell'utente
 export async function fetchLeagues(userToken: string): Promise<FcLeague[]> {
   const res = await fetch(`${APP_BASE}/v1/v1_utente/profilo?app_key=${APP_KEY}&user_token=${userToken}`)
-  if (!res.ok) throw new Error('Recupero profilo fallito')
-  const profile = await res.json()
-  const leghe = profile?.data?.leghe ?? profile?.leghe ?? []
+  const text = await res.text()
+  if (!res.ok) throw new Error(`Profilo fallito: ${res.status} — ${text.slice(0, 200)}`)
+  let profile: Record<string, unknown>
+  try { profile = JSON.parse(text) } catch { throw new Error(`Profilo: risposta non JSON — ${text.slice(0, 200)}`) }
+
+  const leghe =
+    (profile?.data as Record<string, unknown>)?.leghe ??
+    profile?.leghe ??
+    []
+
+  if (!Array.isArray(leghe) || leghe.length === 0) {
+    throw new Error(`Nessuna lega trovata. Risposta: ${JSON.stringify(profile).slice(0, 400)}`)
+  }
   return leghe as FcLeague[]
 }
 
