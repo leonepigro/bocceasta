@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import type { AuctionWithPlayer, Team } from '@/lib/supabase/types'
 import { placeBid, setAutobid, removeAutobid } from '@/lib/auction/actions'
 
@@ -38,6 +39,7 @@ export function AuctionCard({ auction, currentTeam, currentAutobid }: Props) {
   const [showAutobid, setShowAutobid] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const router = useRouter()
 
   const isExpired = secondsLeft === 0
   const isWinning = auction.current_winner_team_id === currentTeam.id
@@ -55,6 +57,7 @@ export function AuctionCard({ auction, currentTeam, currentAutobid }: Props) {
     startTransition(async () => {
       const result = await placeBid(auction.id, bidAmount)
       if (result.error) setError(result.error)
+      else router.refresh()
     })
   }
 
@@ -64,7 +67,7 @@ export function AuctionCard({ auction, currentTeam, currentAutobid }: Props) {
     startTransition(async () => {
       const result = await setAutobid(auction.id, autobidMax)
       if (result.error) setError(result.error)
-      else setShowAutobid(false)
+      else { setShowAutobid(false); router.refresh() }
     })
   }
 
@@ -73,7 +76,7 @@ export function AuctionCard({ auction, currentTeam, currentAutobid }: Props) {
     startTransition(async () => {
       const result = await removeAutobid(auction.id)
       if (result.error) setError(result.error)
-      else setShowAutobid(false)
+      else { setShowAutobid(false); router.refresh() }
     })
   }
 
