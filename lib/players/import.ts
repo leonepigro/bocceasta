@@ -7,19 +7,35 @@ export function parsePlayersXlsx(buffer: Buffer | ArrayBuffer): PlayerImport[] {
   if (!ws) throw new Error('Sheet "Tutti" not found in Excel file')
 
   const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null }) as unknown[][]
-  const dataRows = rows.slice(2) // skip title + header rows
 
+  // Row 1 = headers (row 0 = titolo merged)
+  const headerRow = (rows[1] ?? []).map(h => String(h ?? '').trim().toLowerCase())
+
+  // Trova colonne per nome — fallback agli indici storici
+  const colFvm = headerRow.findIndex(h => h === 'fvm') !== -1
+    ? headerRow.findIndex(h => h === 'fvm')
+    : 11
+  const colId   = headerRow.findIndex(h => h === 'id') !== -1 ? headerRow.findIndex(h => h === 'id') : 0
+  const colR    = headerRow.findIndex(h => h === 'r')  !== -1 ? headerRow.findIndex(h => h === 'r')  : 1
+  const colRm   = headerRow.findIndex(h => h === 'rm') !== -1 ? headerRow.findIndex(h => h === 'rm') : 2
+  const colNome = headerRow.findIndex(h => h === 'nome') !== -1 ? headerRow.findIndex(h => h === 'nome') : 3
+  const colSq   = headerRow.findIndex(h => h === 'squadra' || h === 'sq') !== -1
+    ? headerRow.findIndex(h => h === 'squadra' || h === 'sq')
+    : 4
+
+  const dataRows = rows.slice(2)
   const players: PlayerImport[] = []
+
   for (const row of dataRows) {
-    const id = row[0]
+    const id = row[colId]
     if (!id || typeof id !== 'number') continue
 
-    const classicRole = row[1] ? String(row[1]) : null
-    const rmRaw = row[2] ? String(row[2]) : ''
+    const classicRole = row[colR] ? String(row[colR]) : null
+    const rmRaw = row[colRm] ? String(row[colRm]) : ''
     const roles = rmRaw ? rmRaw.split(';').map(r => r.trim()).filter(Boolean) : []
-    const name = row[3] ? String(row[3]) : ''
-    const serieATeam = row[4] ? String(row[4]) : null
-    const fvm = typeof row[11] === 'number' ? row[11] : null
+    const name = row[colNome] ? String(row[colNome]) : ''
+    const serieATeam = row[colSq] ? String(row[colSq]) : null
+    const fvm = typeof row[colFvm] === 'number' ? row[colFvm] : null
 
     if (!name) continue
 
@@ -27,4 +43,13 @@ export function parsePlayersXlsx(buffer: Buffer | ArrayBuffer): PlayerImport[] {
   }
 
   return players
+}
+
+// Ritorna gli header trovati — utile per debug in admin
+export function inspectXlsxHeaders(buffer: Buffer | ArrayBuffer): string[] {
+  const wb = XLSX.read(buffer, { type: 'buffer' })
+  const ws = wb.Sheets['Tutti']
+  if (!ws) return []
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null }) as unknown[][]
+  return (rows[1] ?? []).map((h, i) => `${i}: ${String(h ?? '')}`)
 }

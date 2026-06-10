@@ -4,7 +4,7 @@ import { importPlayers } from '@/lib/players/import-action'
 
 export function ImportSection() {
   const [file, setFile] = useState<File | null>(null)
-  const [result, setResult] = useState<{ imported: number; errors: string[] } | null>(null)
+  const [result, setResult] = useState<{ imported: number; errors: string[]; headers?: string[] } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -50,12 +50,20 @@ export function ImportSection() {
       </form>
 
       {result && (
-        <div className="mt-4 p-3 bg-green-50 rounded-lg">
+        <div className="mt-4 p-3 bg-green-50 rounded-lg space-y-2">
           <p className="text-green-700 font-semibold">{result.imported} giocatori importati</p>
           {result.errors.length > 0 && (
-            <ul className="text-xs text-red-500 mt-1">
+            <ul className="text-xs text-red-500">
               {result.errors.map((e, i) => <li key={i}>{e}</li>)}
             </ul>
+          )}
+          {result.headers && (
+            <details className="text-xs text-gray-500">
+              <summary className="cursor-pointer hover:text-gray-700">Colonne trovate nell&apos;Excel (debug)</summary>
+              <pre className="mt-1 text-[11px] bg-white border rounded p-2 max-h-32 overflow-y-auto">
+                {result.headers.join('\n')}
+              </pre>
+            </details>
           )}
         </div>
       )}

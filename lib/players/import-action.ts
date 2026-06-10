@@ -1,17 +1,19 @@
 'use server'
 import { createServiceClient, createClient } from '@/lib/supabase/server'
-import { parsePlayersXlsx } from './import'
+import { parsePlayersXlsx, inspectXlsxHeaders } from './import'
 
 export async function importPlayers(data: Uint8Array): Promise<
-  { imported: number; errors: string[] } | { error: string }
+  { imported: number; errors: string[]; headers?: string[] } | { error: string }
 > {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user || user.user_metadata?.role !== 'admin') return { error: 'Unauthorized' }
 
+  const buf = Buffer.from(data)
+  const headers = inspectXlsxHeaders(buf)
   let players
   try {
-    players = parsePlayersXlsx(Buffer.from(data))
+    players = parsePlayersXlsx(buf)
   } catch (e) {
     return { error: `Parse error: ${e instanceof Error ? e.message : String(e)}` }
   }
@@ -29,5 +31,5 @@ export async function importPlayers(data: Uint8Array): Promise<
     else imported += batch.length
   }
 
-  return { imported, errors }
+  return { imported, errors, headers }
 }
