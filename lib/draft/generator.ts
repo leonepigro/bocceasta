@@ -19,15 +19,8 @@ export type DraftResult = {
   assignments: DraftTeamAssignment[]
 }
 
-// Giocatori per ruolo per squadra (26 outfield totali)
-const ROLE_TARGETS: Record<string, number> = {
-  Dc: 4, B: 1, Dd: 1, Ds: 1,
-  E: 3, M: 3, C: 3,
-  T: 2, W: 2,
-  A: 3, Pc: 3,
-}
 const GK_PER_TEAM = 2
-const BALANCE_ROUNDS = 2 // round 27 e 28 per pareggiare
+const OUTFIELD_ROLES = ['Dc', 'B', 'Dd', 'Ds', 'E', 'M', 'C', 'T', 'W', 'A', 'Pc']
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr]
@@ -42,28 +35,25 @@ function sumFvm(players: DraftPlayer[]): number {
   return players.reduce((s, p) => s + (p.fvm ?? 0), 0)
 }
 
-// Snake draft: distribuisce players ai team in ordine serpentina per FVM
-function snakeDraft(
-  pool: DraftPlayer[],        // già ordinati per FVM desc
-  teamCount: number,
-  countPerTeam: number,
-  assignTo: (teamIdx: number, player: DraftPlayer) => void
-): Set<number> {
-  const assigned = new Set<number>()
-  const take = Math.min(pool.length, countPerTeam * teamCount)
-  let idx = 0
-  let order = [...Array(teamCount).keys()]
+// Distribuisce i giocatori (già ordinati FVM desc) ai team in batch di n.
+// In ogni batch: il migliore va al team con FVM totale più basso → bilancio dinamico.
+function balancedDistribute(
+  pool: DraftPlayer[],
+  assignments: DraftTeamAssignment[]
+): void {
+  const n = assignments.length
+  const sorted = [...pool].sort((a, b) => (b.fvm ?? 0) - (a.fvm ?? 0))
 
-  for (let round = 0; round < countPerTeam && idx < take; round++) {
-    for (const teamIdx of order) {
-      if (idx >= take) break
-      assignTo(teamIdx, pool[idx])
-      assigned.add(pool[idx].id)
-      idx++
-    }
-    order = [...order].reverse()
+  for (let i = 0; i < sorted.length; i += n) {
+    const batch = sorted.slice(i, i + n)
+    // Ordina i team per FVM crescente: il più povero prende il migliore del batch
+    const order = [...Array(n).keys()].sort(
+      (a, b) => sumFvm(assignments[a].players) - sumFvm(assignments[b].players)
+    )
+    batch.forEach((player, j) => {
+      if (j < order.length) assignments[order[j]].players.push(player)
+    })
   }
-  return assigned
 }
 
 export function generateDraft(
@@ -71,6 +61,7 @@ export function generateDraft(
   rawPlayers: { id: number; name: string; roles: string[]; fvm: number | null; serie_a_team: string | null }[]
 ): DraftResult {
   const n = bocceastaTeams.length
+  // Shuffle team order solo per i portieri (assegnazione squadre Serie A)
   const teams = shuffle([...bocceastaTeams])
   const assignments: DraftTeamAssignment[] = teams.map(t => ({
     team: t, players: [], gk_serie_a_teams: [],
@@ -97,39 +88,15 @@ export function generateDraft(
     const gks = porPlayers
       .filter(p => assigned.includes(p.serie_a_team ?? ''))
       .slice(0, GK_PER_TEAM)
-    for (const gk of gks) {
-      assignments[i].players.push(gk)
-      assignedIds.add(gk.id)
-    }
+    for (const gk of gks) { assignments[i].players.push(gk); assignedIds.add(gk.id) }
   }
 
-  // ─── OUTFIELD: snake draft per ruolo ───────────────────────
-  for (const [role, countPerTeam] of Object.entries(ROLE_TARGETS)) {
+  // ─── OUTFIELD: per ogni ruolo, batch bilanciati per FVM ────────
+  for (const role of OUTFIELD_ROLES) {
     const pool = players
       .filter(p => p.primary_role === role && !assignedIds.has(p.id))
-      .sort((a, b) => (b.fvm ?? 0) - (a.fvm ?? 0))
-
-    const ids = snakeDraft(pool, n, countPerTeam, (teamIdx, player) => {
-      assignments[teamIdx].players.push(player)
-    })
-    ids.forEach(id => assignedIds.add(id))
-  }
-
-  // ─── ROUND 27-28: bilancio FVM (i team più bassi prendono i migliori rimasti) ──
-  const remaining = players
-    .filter(p => p.primary_role !== 'Por' && !assignedIds.has(p.id))
-    .sort((a, b) => (b.fvm ?? 0) - (a.fvm ?? 0))
-
-  let remIdx = 0
-  for (let round = 0; round < BALANCE_ROUNDS && remIdx < remaining.length; round++) {
-    // Ordina i team per FVM totale crescente → chi ha meno prende i migliori rimasti
-    const order = [...Array(n).keys()].sort(
-      (a, b) => sumFvm(assignments[a].players) - sumFvm(assignments[b].players)
-    )
-    for (const teamIdx of order) {
-      if (remIdx >= remaining.length) break
-      assignments[teamIdx].players.push(remaining[remIdx++])
-    }
+    balancedDistribute(pool, assignments)
+    pool.forEach(p => assignedIds.add(p.id))
   }
 
   return { assignments }
