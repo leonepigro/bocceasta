@@ -51,7 +51,22 @@ export function PreferencesEditor({
     return c
   }, [prefs, players])
 
+  const wishlistFvm = useMemo(() => {
+    let s = 0
+    for (const id of prefs) {
+      const p = players.find(x => x.id === id)
+      if (p?.fvm) s += p.fvm
+    }
+    return s
+  }, [prefs, players])
+
+  const avgPerTeam = useMemo(() => {
+    const total = players.reduce((s, p) => s + (p.fvm ?? 0), 0)
+    return Math.round(total / 10)
+  }, [players])
+
   const isFull = prefs.size >= MAX_WISHLIST
+  const overAvg = wishlistFvm > avgPerTeam
 
   function toggle(id: number) {
     const newSet = new Set(prefs)
@@ -74,12 +89,36 @@ export function PreferencesEditor({
         <p>Strategia: mescola top con giocatori medi che pensi pochi punteranno.</p>
       </div>
 
-      {/* Counter per ruolo */}
-      <div className={`border rounded-lg p-3 ${isFull ? 'border-orange-300 bg-orange-50' : ''}`}>
-        <p className="text-xs text-gray-500 mb-2">
+      {/* Counter */}
+      <div className={`border rounded-lg p-3 space-y-2 ${isFull ? 'border-orange-300 bg-orange-50' : ''}`}>
+        <p className="text-xs text-gray-500">
           Wishlist: <strong className={isFull ? 'text-orange-600' : ''}>{prefs.size} / {MAX_WISHLIST} giocatori</strong>
-          {isFull && <span className="text-orange-600 ml-2">— limite raggiunto, rimuovi qualcuno per aggiungere altri</span>}
+          {isFull && <span className="text-orange-600 ml-2">— limite raggiunto</span>}
         </p>
+
+        {/* Quotazione totale vs media */}
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-gray-500">Quotazione wishlist:</span>
+          <strong className={overAvg ? 'text-red-600' : 'text-gray-700'}>
+            {wishlistFvm}
+          </strong>
+          <span className="text-gray-400">/ {avgPerTeam} media</span>
+          <span className="relative group cursor-help">
+            <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-600 text-[10px] font-bold">?</span>
+            <span className="absolute left-0 top-5 z-10 hidden group-hover:block bg-gray-800 text-white text-[11px] rounded-lg p-2.5 w-72 shadow-lg leading-relaxed">
+              <strong>Come funziona la wishlist</strong><br/>
+              Al sorteggio, quando un giocatore in wishlist sta per essere assegnato:<br/>
+              • Se più partecipanti lo hanno in wishlist → vince chi è <em>sotto la media</em> di quotazione totale, con piccola penalty per chi ha già vinto conflitti<br/>
+              • Se un solo partecipante lo ha → va a lui, ma solo se è sotto media<br/>
+              • Sopra media → l&apos;effetto wishlist si annulla, vince il normale bilanciamento<br/><br/>
+              Per questo: <strong>tenere la somma wishlist vicino alla media</strong> aumenta le tue chance. Stackare top porta a poche vittorie.
+            </span>
+          </span>
+          {overAvg && (
+            <span className="text-red-600 font-semibold ml-1">⚠ oltre media</span>
+          )}
+        </div>
+
         <div className="flex flex-wrap gap-1.5">
           {ALL_ROLES.map(r => {
             const c = countByRole[r] ?? 0
