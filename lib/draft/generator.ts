@@ -47,14 +47,13 @@ function balancedDistribute(
 
   for (let i = 0; i < sorted.length; i += n) {
     const batch = sorted.slice(i, i + n)
-    // Shuffle casuale: ogni team pesca un giocatore a caso dal gruppo
+    // Il batch viene shufflato: la casualità sta in quale giocatore specifico prendi.
+    // I team vengono ordinati per FVM crescente: chi ha meno prende per primo dal batch.
+    // Poiché il batch è casuale, prendere "per primo" non significa prendere il migliore.
     const shuffledBatch = shuffle(batch)
-    // Per il primo batch di ogni ruolo, ordine team completamente casuale.
-    // Per i batch successivi, i team con FVM più basso hanno priorità (piccola correzione).
-    const order = i === 0
-      ? shuffle([...Array(n).keys()])
-      : [...Array(n).keys()].sort((a, b) => sumFvm(assignments[a].players) - sumFvm(assignments[b].players))
-
+    const order = [...Array(n).keys()].sort(
+      (a, b) => sumFvm(assignments[a].players) - sumFvm(assignments[b].players)
+    )
     shuffledBatch.forEach((player, j) => {
       if (j < order.length) assignments[order[j]].players.push(player)
     })
