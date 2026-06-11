@@ -13,17 +13,21 @@ export type DraftTeamAssignment = {
   team: Team
   players: DraftPlayer[]
   gk_serie_a_teams: string[]
-  budget_remaining: number
 }
 
 export type DraftResult = {
   assignments: DraftTeamAssignment[]
 }
 
-const TOTAL_BUDGET = 500
+// Giocatori per ruolo per squadra (26 outfield totali)
+const ROLE_TARGETS: Record<string, number> = {
+  Dc: 4, B: 1, Dd: 1, Ds: 1,
+  E: 3, M: 3, C: 3,
+  T: 2, W: 2,
+  A: 3, Pc: 3,
+}
 const GK_PER_TEAM = 2
-const MIN_OUTFIELD = 26
-const MAX_OUTFIELD = 28
+const BALANCE_ROUNDS = 2 // round 27 e 28 per pareggiare
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr]
@@ -38,6 +42,30 @@ function sumFvm(players: DraftPlayer[]): number {
   return players.reduce((s, p) => s + (p.fvm ?? 0), 0)
 }
 
+// Snake draft: distribuisce players ai team in ordine serpentina per FVM
+function snakeDraft(
+  pool: DraftPlayer[],        // già ordinati per FVM desc
+  teamCount: number,
+  countPerTeam: number,
+  assignTo: (teamIdx: number, player: DraftPlayer) => void
+): Set<number> {
+  const assigned = new Set<number>()
+  const take = Math.min(pool.length, countPerTeam * teamCount)
+  let idx = 0
+  let order = [...Array(teamCount).keys()]
+
+  for (let round = 0; round < countPerTeam && idx < take; round++) {
+    for (const teamIdx of order) {
+      if (idx >= take) break
+      assignTo(teamIdx, pool[idx])
+      assigned.add(pool[idx].id)
+      idx++
+    }
+    order = [...order].reverse()
+  }
+  return assigned
+}
+
 export function generateDraft(
   bocceastaTeams: Team[],
   rawPlayers: { id: number; name: string; roles: string[]; fvm: number | null; serie_a_team: string | null }[]
@@ -45,14 +73,16 @@ export function generateDraft(
   const n = bocceastaTeams.length
   const teams = shuffle([...bocceastaTeams])
   const assignments: DraftTeamAssignment[] = teams.map(t => ({
-    team: t, players: [], gk_serie_a_teams: [], budget_remaining: TOTAL_BUDGET,
+    team: t, players: [], gk_serie_a_teams: [],
   }))
 
   const players: DraftPlayer[] = rawPlayers
     .filter(p => p.roles.length > 0)
     .map(p => ({ ...p, primary_role: p.roles[0] }))
 
-  // ─── PORTIERI: top 2 FVM dalle 2 squadre Serie A assegnate ──
+  const assignedIds = new Set<number>()
+
+  // ─── PORTIERI: top 2 FVM dalle 2 squadre Serie A sorteggiate ───
   const porPlayers = players
     .filter(p => p.primary_role === 'Por')
     .sort((a, b) => (b.fvm ?? 0) - (a.fvm ?? 0))
@@ -62,48 +92,44 @@ export function generateDraft(
   )
 
   for (let i = 0; i < n; i++) {
-    const t1 = serieATeams[i * 2]
-    const t2 = serieATeams[i * 2 + 1]
-    const assigned = [t1, t2].filter(Boolean)
+    const assigned = [serieATeams[i * 2], serieATeams[i * 2 + 1]].filter(Boolean)
     assignments[i].gk_serie_a_teams = assigned
     const gks = porPlayers
       .filter(p => assigned.includes(p.serie_a_team ?? ''))
-      .slice(0, GK_PER_TEAM)  // top 2 per FVM (già ordinati)
-    assignments[i].players.push(...gks)
-    assignments[i].budget_remaining = TOTAL_BUDGET - sumFvm(assignments[i].players)
+      .slice(0, GK_PER_TEAM)
+    for (const gk of gks) {
+      assignments[i].players.push(gk)
+      assignedIds.add(gk.id)
+    }
   }
 
-  // ─── OUTFIELD: ordinati per FVM globale, round obbligatori + opzionali ───
-  const outfield = players
-    .filter(p => p.primary_role !== 'Por')
+  // ─── OUTFIELD: snake draft per ruolo ───────────────────────
+  for (const [role, countPerTeam] of Object.entries(ROLE_TARGETS)) {
+    const pool = players
+      .filter(p => p.primary_role === role && !assignedIds.has(p.id))
+      .sort((a, b) => (b.fvm ?? 0) - (a.fvm ?? 0))
+
+    const ids = snakeDraft(pool, n, countPerTeam, (teamIdx, player) => {
+      assignments[teamIdx].players.push(player)
+    })
+    ids.forEach(id => assignedIds.add(id))
+  }
+
+  // ─── ROUND 27-28: bilancio FVM (i team più bassi prendono i migliori rimasti) ──
+  const remaining = players
+    .filter(p => p.primary_role !== 'Por' && !assignedIds.has(p.id))
     .sort((a, b) => (b.fvm ?? 0) - (a.fvm ?? 0))
 
-  let playerIdx = 0
-
-  for (let round = 1; round <= MAX_OUTFIELD; round++) {
-    // Round 1-26: tutti. Round 27-28: solo chi ha budget > 0
-    const eligible = round <= MIN_OUTFIELD
-      ? assignments.map((_, i) => i)
-      : assignments.map((a, i) => ({ i, budget: TOTAL_BUDGET - sumFvm(a.players) }))
-          .filter(x => x.budget > 0)
-          .map(x => x.i)
-
-    if (eligible.length === 0) break
-
-    const batch = outfield.slice(playerIdx, playerIdx + eligible.length)
-    playerIdx += batch.length
-    if (batch.length === 0) break
-
-    const shuffledBatch = shuffle(batch)
-    const shuffledEligible = shuffle([...eligible])
-    shuffledBatch.forEach((player, j) => {
-      assignments[shuffledEligible[j]].players.push(player)
-    })
-  }
-
-  // Aggiorna budget_remaining finale
-  for (const a of assignments) {
-    a.budget_remaining = TOTAL_BUDGET - sumFvm(a.players)
+  let remIdx = 0
+  for (let round = 0; round < BALANCE_ROUNDS && remIdx < remaining.length; round++) {
+    // Ordina i team per FVM totale crescente → chi ha meno prende i migliori rimasti
+    const order = [...Array(n).keys()].sort(
+      (a, b) => sumFvm(assignments[a].players) - sumFvm(assignments[b].players)
+    )
+    for (const teamIdx of order) {
+      if (remIdx >= remaining.length) break
+      assignments[teamIdx].players.push(remaining[remIdx++])
+    }
   }
 
   return { assignments }
@@ -116,5 +142,5 @@ export function draftStats(assignment: DraftTeamAssignment) {
   }
   const fvmTotal = assignment.players.reduce((s, p) => s + (p.fvm ?? 0), 0)
   const outfieldCount = assignment.players.filter(p => p.primary_role !== 'Por').length
-  return { byRole, fvmTotal, total: assignment.players.length, outfieldCount, budgetRemaining: TOTAL_BUDGET - fvmTotal }
+  return { byRole, fvmTotal, total: assignment.players.length, outfieldCount }
 }

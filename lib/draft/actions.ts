@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache'
 export type ApplyAssignment = {
   playerId: number
   teamId: string
-  fvm: number | null
+  fvm?: number | null
 }
 
 export async function applyDraft(assignments: ApplyAssignment[]) {
