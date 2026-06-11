@@ -38,15 +38,16 @@ function sumFvm(players: DraftPlayer[]): number {
   return players.reduce((s, p) => s + (p.fvm ?? 0), 0)
 }
 
-// Per ogni ruolo: prende esattamente floor(pool.length / n) giocatori per team.
-// Ordina per FVM desc, poi assegna il migliore disponibile al team col FVM totale più basso.
-// In caso di parità FVM tra team, l'ordine è quello iniziale (shufflato una volta a sorte).
+// Distribuisce pool in batch da n.
+// outfieldFvm[i] traccia solo il FVM degli outfield: esclude portieri (assegnati casualmente)
+// per non distorcere il bilanciamento.
 function balancedDistribute(
   pool: DraftPlayer[],
-  assignments: DraftTeamAssignment[]
+  assignments: DraftTeamAssignment[],
+  outfieldFvm: number[]
 ): void {
   const n = assignments.length
-  const rounds = Math.floor(pool.length / n)   // uguale per tutti i team
+  const rounds = Math.floor(pool.length / n)
   const take = rounds * n
   const sorted = [...pool]
     .sort((a, b) => (b.fvm ?? 0) - (a.fvm ?? 0))
@@ -54,13 +55,14 @@ function balancedDistribute(
 
   for (let i = 0; i < take; i += n) {
     const batch = sorted.slice(i, i + n)
-    // Ordina team per FVM totale crescente (stabile: parità → ordine shuffle iniziale)
     const order = [...Array(n).keys()].sort((a, b) => {
-      const diff = sumFvm(assignments[a].players) - sumFvm(assignments[b].players)
-      // Se i team sono entro 30 FVM, aggiungi rumore casuale: componente di fortuna
+      const diff = outfieldFvm[a] - outfieldFvm[b]
       return Math.abs(diff) < 30 ? diff + (Math.random() - 0.5) * 40 : diff
     })
-    batch.forEach((player, j) => assignments[order[j]].players.push(player))
+    batch.forEach((player, j) => {
+      assignments[order[j]].players.push(player)
+      outfieldFvm[order[j]] += player.fvm ?? 0
+    })
   }
 }
 
@@ -98,14 +100,20 @@ export function generateDraft(
     for (const gk of gks) { assignments[i].players.push(gk); assignedIds.add(gk.id) }
   }
 
+  // outfieldFvm[i] = FVM solo degli outfield — esclude portieri per non distorcere il bilanciamento
+  const outfieldFvm = new Array(n).fill(0)
+
   // ─── OUTFIELD: per ogni ruolo, ordine team shufflato a sorte, poi batch bilanciati ──
   for (const role of OUTFIELD_ROLES) {
     const pool = players
       .filter(p => p.primary_role === role && !assignedIds.has(p.id))
-    // Shuffle dell'ordine team: la casualità sta in chi parte per primo per ogni ruolo
-    const roleAssignments = shuffle([...Array(assignments.length).keys()])
-      .map(i => assignments[i])
-    balancedDistribute(pool, roleAssignments)
+    // Shuffle → mappa gli indici originali per mantenere il link a outfieldFvm[i]
+    const shuffledIdx = shuffle([...Array(n).keys()])
+    const roleAssignments = shuffledIdx.map(i => assignments[i])
+    const roleOutfieldFvm = shuffledIdx.map(i => outfieldFvm[i])
+    balancedDistribute(pool, roleAssignments, roleOutfieldFvm)
+    // Riscrivi outfieldFvm originale con i valori aggiornati
+    shuffledIdx.forEach((origIdx, j) => { outfieldFvm[origIdx] = roleOutfieldFvm[j] })
     pool.forEach(p => assignedIds.add(p.id))
   }
 
