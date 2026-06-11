@@ -212,9 +212,9 @@ export function DraftSection({ teams, players, activeDraft }: Props) {
         </div>
       </details>
 
-      <div className="text-xs text-gray-400 pt-2">
-        <p>Per vedere le rose assegnate dopo l&apos;esecuzione: apri il link pubblico.</p>
-        <p>Per applicare le rose al sistema: usa il pulsante &quot;Applica&quot; sopra dopo la conferma dell&apos;esecuzione.</p>
+      <div className="text-xs text-gray-400 pt-2 flex items-center justify-between">
+        <p>Per applicare le rose: usa il pulsante &quot;Applica&quot; dopo l&apos;esecuzione.</p>
+        <a href="/admin/sorteggi" className="text-blue-500 underline flex-shrink-0 ml-4">Storico sorteggi →</a>
       </div>
     </div>
   )
