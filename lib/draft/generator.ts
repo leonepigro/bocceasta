@@ -1,3 +1,4 @@
+// Algoritmo sorteggio v2 (portieri raggruppati per squadra Serie A)
 import type { Team } from '@/lib/supabase/types'
 
 export type DraftPlayer = {
