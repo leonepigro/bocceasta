@@ -16,9 +16,22 @@ export type DraftTeamAssignment = {
   gk_serie_a_teams: string[]
 }
 
+// Conflitto wishlist: ≥2 team avevano lo stesso giocatore in preferenza.
+export type DraftConflict = {
+  player_id: number
+  player_name: string
+  primary_role: string
+  contenders: string[]   // team_name di chi aveva il giocatore in wishlist
+  winner: string         // team_name che lo ha vinto
+}
+
 export type DraftResult = {
   assignments: DraftTeamAssignment[]
+  conflicts?: DraftConflict[]
 }
+
+// Penalty per conflitto vinto: aggiunge ranking effettivo nei conflitti successivi.
+const CONFLICT_WIN_PENALTY = 50
 
 // Ruoli outfield (portieri trattati separatamente per squadra Serie A)
 const OUTFIELD_ROLES = ['Pc', 'A', 'T', 'W', 'M', 'C', 'E', 'Dc', 'B', 'Dd', 'Ds']
@@ -37,13 +50,14 @@ function shuffle<T>(arr: T[]): T[] {
 // Mappa indici team interni (dipende dall'ordine `assignments`).
 export type Wishlist = Map<number, Set<number>>
 
-// Distribuzione globale per Quotazione: tutti i giocatori ordinati per FVM desc,
-// ogni giocatore va al team con totale FVM più basso che ha ancora slot per quel ruolo.
-// Se ≥1 team eligibile ha il giocatore in wishlist → restringe la scelta a quelli.
+// Distribuzione globale: scegli team col totale FVM più basso che ha slot per il ruolo.
+// Wishlist: se ≥1 team eligibile ha il giocatore in preferenza, restringe a quelli.
+// Conflitti veri (≥2 contendenti wishlist) → chi vince accumula penalty per i successivi.
 function globalBalancedDistribute(
   allPlayers: DraftPlayer[],
   assignments: DraftTeamAssignment[],
-  wishlist: Wishlist | null
+  wishlist: Wishlist | null,
+  conflicts: DraftConflict[]
 ): void {
   const n = assignments.length
 
@@ -59,6 +73,7 @@ function globalBalancedDistribute(
   const totalFvm: number[] = assignments.map(a =>
     a.players.reduce((s, p) => s + (p.fvm ?? 0), 0)
   )
+  const conflictWins: number[] = new Array(n).fill(0)
 
   const sorted = [...allPlayers].sort((a, b) => (b.fvm ?? 0) - (a.fvm ?? 0))
 
@@ -68,15 +83,25 @@ function globalBalancedDistribute(
     let eligible = [...Array(n).keys()].filter(i => (remaining[i][role] ?? 0) > 0)
     if (eligible.length === 0) continue
 
-    // Wishlist: se ≥1 team eligibile ha questo giocatore in wishlist, limita a quelli
+    let isConflict = false
+    let contendersIdx: number[] = []
+
     const fans = wishlist?.get(player.id)
     if (fans && fans.size > 0) {
       const wishedAndEligible = eligible.filter(i => fans.has(i))
-      if (wishedAndEligible.length > 0) eligible = wishedAndEligible
+      if (wishedAndEligible.length > 0) {
+        eligible = wishedAndEligible
+        contendersIdx = wishedAndEligible
+        // Conflitto vero = ≥2 team eligibili lo avevano in wishlist
+        isConflict = wishedAndEligible.length >= 2
+      }
     }
 
     eligible.sort((a, b) => {
-      const diff = totalFvm[a] - totalFvm[b]
+      // Durante conflitto vero: penalizza chi ha già vinto conflitti precedenti
+      const aScore = totalFvm[a] + (isConflict ? conflictWins[a] * CONFLICT_WIN_PENALTY : 0)
+      const bScore = totalFvm[b] + (isConflict ? conflictWins[b] * CONFLICT_WIN_PENALTY : 0)
+      const diff = aScore - bScore
       return diff + (Math.random() - 0.5) * 5
     })
 
@@ -84,6 +109,17 @@ function globalBalancedDistribute(
     assignments[pick].players.push(player)
     totalFvm[pick] += player.fvm ?? 0
     remaining[pick][role]--
+
+    if (isConflict) {
+      conflictWins[pick]++
+      conflicts.push({
+        player_id: player.id,
+        player_name: player.name,
+        primary_role: player.primary_role,
+        contenders: contendersIdx.map(i => assignments[i].team.team_name),
+        winner: assignments[pick].team.team_name,
+      })
+    }
   }
 }
 
@@ -170,9 +206,10 @@ function generateSingleDraft(
 
   // ─── OUTFIELD distribuiti per Quotazione (parte dal totale già caricato coi portieri) ───
   const allOutfield = players.filter(p => OUTFIELD_ROLES.includes(p.primary_role))
-  globalBalancedDistribute(allOutfield, assignments, wishlist)
+  const conflicts: DraftConflict[] = []
+  globalBalancedDistribute(allOutfield, assignments, wishlist, conflicts)
 
-  return { assignments }
+  return { assignments, conflicts }
 }
 
 // FVM totale rosa (portieri inclusi)

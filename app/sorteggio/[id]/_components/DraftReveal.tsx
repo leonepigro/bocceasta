@@ -48,6 +48,10 @@ export function DraftReveal({ draft }: { draft: DraftResult }) {
   const current = steps[step - 1] ?? null
   const done = step >= steps.length
 
+  // Lookup conflitti per player_id
+  const conflictByPlayer = new Map<number, NonNullable<DraftResult['conflicts']>[number]>()
+  for (const c of draft.conflicts ?? []) conflictByPlayer.set(c.player_id, c)
+
   useEffect(() => {
     if (isPlaying) {
       intervalRef.current = setInterval(() => {
@@ -68,6 +72,7 @@ export function DraftReveal({ draft }: { draft: DraftResult }) {
   })).sort((a, b) => b.fvmTotal - a.fvmTotal)
 
   if (mode === 'summary') {
+    const conflicts = draft.conflicts ?? []
     return (
       <div className="space-y-4">
         <div className="flex gap-2 justify-center">
@@ -77,6 +82,31 @@ export function DraftReveal({ draft }: { draft: DraftResult }) {
             ▶ Rivela in diretta
           </button>
         </div>
+
+        {conflicts.length > 0 && (
+          <details className="border border-orange-200 bg-orange-50 rounded-lg overflow-hidden">
+            <summary className="px-4 py-3 cursor-pointer hover:bg-orange-100 font-semibold text-sm text-orange-700 flex items-center justify-between">
+              <span>⚔️ Conflitti wishlist ({conflicts.length})</span>
+              <span className="text-xs font-normal text-orange-600">i giocatori contesi</span>
+            </summary>
+            <div className="divide-y border-t border-orange-200">
+              {conflicts
+                .sort((a, b) => b.contenders.length - a.contenders.length)
+                .map(c => (
+                  <div key={c.player_id} className="px-4 py-2 text-xs flex items-center gap-2">
+                    <span className="text-white font-bold px-1.5 py-0.5 rounded w-8 text-center flex-shrink-0"
+                      style={{ background: ROLE_COLOR[c.primary_role] ?? '#9ca3af' }}>{c.primary_role}</span>
+                    <span className="font-semibold flex-shrink-0">{c.player_name}</span>
+                    <span className="text-gray-500 flex-1 truncate">
+                      Conteso: {c.contenders.join(', ')}
+                    </span>
+                    <span className="font-bold text-green-700 flex-shrink-0">→ {c.winner}</span>
+                  </div>
+                ))}
+            </div>
+          </details>
+        )}
+
         <div className="space-y-2">
           {byTeam.map(t => (
             <details key={t.name} className="border rounded-lg overflow-hidden">
@@ -131,20 +161,30 @@ export function DraftReveal({ draft }: { draft: DraftResult }) {
       </div>
 
       {/* Step corrente */}
-      {current?.type === 'single' && (
-        <div className="border-2 rounded-xl p-5 text-center animate-pulse-once"
-          style={{ borderColor: ROLE_COLOR[current.event.player.primary_role] }}>
-          <p className="text-xs text-gray-400 mb-1 uppercase tracking-wide">{current.event.teamName}</p>
-          <p className="text-3xl font-black text-gray-800 leading-tight">{current.event.player.name}</p>
-          <p className="text-sm text-gray-400 mt-2">
-            <span className="text-white font-bold px-2 py-0.5 rounded mr-2"
-              style={{ background: ROLE_COLOR[current.event.player.primary_role] }}>
-              {current.event.player.primary_role}
-            </span>
-            {current.event.player.serie_a_team} · Quotazione {current.event.player.fvm ?? '—'}
-          </p>
-        </div>
-      )}
+      {current?.type === 'single' && (() => {
+        const conflict = conflictByPlayer.get(current.event.player.id)
+        return (
+          <div className="border-2 rounded-xl p-5 text-center animate-pulse-once"
+            style={{ borderColor: ROLE_COLOR[current.event.player.primary_role] }}>
+            {conflict && (
+              <p className="text-xs font-bold text-orange-600 mb-2 uppercase tracking-wide">
+                ⚔️ Conteso tra {conflict.contenders.join(', ')}
+              </p>
+            )}
+            <p className="text-xs text-gray-400 mb-1 uppercase tracking-wide">
+              {conflict ? `Vince → ${current.event.teamName}` : current.event.teamName}
+            </p>
+            <p className="text-3xl font-black text-gray-800 leading-tight">{current.event.player.name}</p>
+            <p className="text-sm text-gray-400 mt-2">
+              <span className="text-white font-bold px-2 py-0.5 rounded mr-2"
+                style={{ background: ROLE_COLOR[current.event.player.primary_role] }}>
+                {current.event.player.primary_role}
+              </span>
+              {current.event.player.serie_a_team} · Quotazione {current.event.player.fvm ?? '—'}
+            </p>
+          </div>
+        )
+      })()}
 
       {current?.type === 'batch' && (
         <div className="border-2 border-gray-300 rounded-xl p-4">
