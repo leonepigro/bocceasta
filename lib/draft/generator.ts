@@ -19,8 +19,9 @@ export type DraftResult = {
   assignments: DraftTeamAssignment[]
 }
 
-// Tutti i ruoli, portieri inclusi. Distribuzione globale per Quotazione (FVM).
-const ALL_ROLES = ['Por', 'Pc', 'A', 'T', 'W', 'M', 'C', 'E', 'Dc', 'B', 'Dd', 'Ds']
+// Ruoli outfield (portieri trattati separatamente per squadra Serie A)
+const OUTFIELD_ROLES = ['Pc', 'A', 'T', 'W', 'M', 'C', 'E', 'Dc', 'B', 'Dd', 'Ds']
+const GK_SERIE_A_TEAMS_PER_PARTICIPANT = 2
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr]
@@ -49,7 +50,10 @@ function globalBalancedDistribute(
     Object.fromEntries(Object.entries(roleTarget).map(([r, t]) => [r, t]))
   )
 
-  const totalFvm: number[] = new Array(n).fill(0)
+  // Inizializza con FVM già presenti (es. portieri assegnati prima)
+  const totalFvm: number[] = assignments.map(a =>
+    a.players.reduce((s, p) => s + (p.fvm ?? 0), 0)
+  )
 
   const sorted = [...allPlayers].sort((a, b) => (b.fvm ?? 0) - (a.fvm ?? 0))
 
@@ -75,6 +79,7 @@ function generateSingleDraft(
   bocceastaTeams: Team[],
   rawPlayers: { id: number; name: string; roles: string[]; fvm: number | null; serie_a_team: string | null }[]
 ): DraftResult {
+  const n = bocceastaTeams.length
   const teams = shuffle([...bocceastaTeams])
   const assignments: DraftTeamAssignment[] = teams.map(t => ({
     team: t, players: [], gk_serie_a_teams: [],
@@ -84,19 +89,55 @@ function generateSingleDraft(
     .filter(p => p.roles.length > 0)
     .map(p => ({ ...p, primary_role: p.roles[0] }))
 
-  // Distribuzione unica per tutti i ruoli (portieri inclusi), bilanciata per Quotazione
-  const allEligible = players.filter(p => ALL_ROLES.includes(p.primary_role))
-  globalBalancedDistribute(allEligible, assignments)
+  // ─── PORTIERI per squadra Serie A, bilanciati per quotazione del top GK ───
+  const porPlayers = players.filter(p => p.primary_role === 'Por')
 
-  // Calcola squadre Serie A per i portieri assegnati (solo per visualizzazione)
-  for (const a of assignments) {
-    a.gk_serie_a_teams = [...new Set(
-      a.players
-        .filter(p => p.primary_role === 'Por')
-        .map(p => p.serie_a_team)
-        .filter(Boolean) as string[]
-    )]
+  // Raggruppa portieri per squadra Serie A
+  const gkByTeam = new Map<string, DraftPlayer[]>()
+  for (const gk of porPlayers) {
+    if (!gk.serie_a_team) continue
+    const list = gkByTeam.get(gk.serie_a_team) ?? []
+    list.push(gk)
+    gkByTeam.set(gk.serie_a_team, list)
   }
+
+  // Per ogni squadra Serie A: quotazione = max FVM tra i suoi portieri
+  type GkTeamSlot = { serieATeam: string; topFvm: number; players: DraftPlayer[] }
+  const gkSlots: GkTeamSlot[] = [...gkByTeam.entries()].map(([serieATeam, gks]) => ({
+    serieATeam,
+    topFvm: Math.max(...gks.map(g => g.fvm ?? 0)),
+    players: gks,
+  }))
+
+  // Ordina per topFvm desc, poi assegna al partecipante con quotazione totale più bassa
+  // che ha ancora slot Serie A disponibili (max GK_SERIE_A_TEAMS_PER_PARTICIPANT a testa)
+  const gkSlotsSorted = [...gkSlots].sort((a, b) => b.topFvm - a.topFvm)
+  const totalFvm: number[] = new Array(n).fill(0)
+  const serieATeamsCount: number[] = new Array(n).fill(0)
+
+  for (const slot of gkSlotsSorted) {
+    const eligible = [...Array(n).keys()].filter(
+      i => serieATeamsCount[i] < GK_SERIE_A_TEAMS_PER_PARTICIPANT
+    )
+    if (eligible.length === 0) break
+
+    eligible.sort((a, b) => {
+      const diff = totalFvm[a] - totalFvm[b]
+      return diff + (Math.random() - 0.5) * 5
+    })
+
+    const pick = eligible[0]
+    assignments[pick].gk_serie_a_teams.push(slot.serieATeam)
+    for (const gk of slot.players) {
+      assignments[pick].players.push(gk)
+      totalFvm[pick] += gk.fvm ?? 0
+    }
+    serieATeamsCount[pick]++
+  }
+
+  // ─── OUTFIELD distribuiti per Quotazione (parte dal totale già caricato coi portieri) ───
+  const allOutfield = players.filter(p => OUTFIELD_ROLES.includes(p.primary_role))
+  globalBalancedDistribute(allOutfield, assignments)
 
   return { assignments }
 }
