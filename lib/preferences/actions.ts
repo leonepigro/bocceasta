@@ -24,7 +24,7 @@ export async function getMyPreferences(): Promise<number[]> {
   return (data ?? []).map(r => r.player_id)
 }
 
-export const MAX_WISHLIST_SIZE = 30
+const MAX_WISHLIST_SIZE = 30
 
 export async function togglePreference(playerId: number) {
   const supabase = await createClient()
