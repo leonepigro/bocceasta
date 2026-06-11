@@ -20,7 +20,10 @@ export type DraftResult = {
 }
 
 const GK_PER_TEAM = 2
-const OUTFIELD_ROLES = ['Dc', 'B', 'Dd', 'Ds', 'E', 'M', 'C', 'T', 'W', 'A', 'Pc']
+// Ruoli distribuiti dal più alto FVM al più basso: prima i top player (Pc, A) che
+// creano più varianza — il bilanciamento li compensa subito. Ultimi i difensori
+// (FVM basso, varianza minima) dove l'effetto sull'equilibrio è trascurabile.
+const OUTFIELD_ROLES = ['Pc', 'A', 'T', 'W', 'M', 'C', 'E', 'Dc', 'B', 'Dd', 'Ds']
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr]
@@ -52,10 +55,11 @@ function balancedDistribute(
   for (let i = 0; i < take; i += n) {
     const batch = sorted.slice(i, i + n)
     // Ordina team per FVM totale crescente (stabile: parità → ordine shuffle iniziale)
-    const order = [...Array(n).keys()].sort(
-      (a, b) => sumFvm(assignments[a].players) - sumFvm(assignments[b].players)
-    )
-    // Assegna best → lowest, second → second-lowest, ecc.
+    const order = [...Array(n).keys()].sort((a, b) => {
+      const diff = sumFvm(assignments[a].players) - sumFvm(assignments[b].players)
+      // Se i team sono entro 30 FVM, aggiungi rumore casuale: componente di fortuna
+      return Math.abs(diff) < 30 ? diff + (Math.random() - 0.5) * 40 : diff
+    })
     batch.forEach((player, j) => assignments[order[j]].players.push(player))
   }
 }
