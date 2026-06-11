@@ -32,46 +32,44 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 // Assegnazione globale per FVM: tutti i giocatori outfield ordinati FVM desc,
-// ogni giocatore va al team con outfield FVM più basso che ha ancora slot per quel ruolo.
-// Garantisce che i top player vadano a team diversi indipendentemente dal ruolo.
+// ogni giocatore va al team con TOTALE FVM più basso (portieri inclusi).
+// I portieri sono già stati assegnati casualmente → chi ha portieri ricchi riceve outfield poveri.
 function globalBalancedDistribute(
   allOutfield: DraftPlayer[],
   assignments: DraftTeamAssignment[]
 ): void {
   const n = assignments.length
 
-  // Calcola quanti slot per ruolo per team (floor = uguale per tutti)
   const roleCounts: Record<string, number> = {}
   for (const p of allOutfield) roleCounts[p.primary_role] = (roleCounts[p.primary_role] ?? 0) + 1
   const roleTarget: Record<string, number> = {}
   for (const [role, cnt] of Object.entries(roleCounts)) roleTarget[role] = Math.floor(cnt / n)
 
-  // Slot rimanenti per ruolo per team: remaining[teamIdx][role]
   const remaining: Record<string, number>[] = Array.from({ length: n }, () =>
     Object.fromEntries(Object.entries(roleTarget).map(([r, t]) => [r, t]))
   )
 
-  const outfieldFvm = new Array(n).fill(0)
+  // Inizializza con FVM portieri già assegnati: questo compensa lo squilibrio iniziale
+  const totalFvm: number[] = assignments.map(a =>
+    a.players.reduce((s, p) => s + (p.fvm ?? 0), 0)
+  )
 
-  // Ordina globalmente per FVM desc
   const sorted = [...allOutfield].sort((a, b) => (b.fvm ?? 0) - (a.fvm ?? 0))
 
   for (const player of sorted) {
     const role = player.primary_role
 
-    // Team eligibili: hanno ancora slot per questo ruolo
     const eligible = [...Array(n).keys()].filter(i => (remaining[i][role] ?? 0) > 0)
     if (eligible.length === 0) continue
 
-    // Ordina per outfield FVM crescente con piccolo rumore (tie-breaking casuale)
     eligible.sort((a, b) => {
-      const diff = outfieldFvm[a] - outfieldFvm[b]
+      const diff = totalFvm[a] - totalFvm[b]
       return diff + (Math.random() - 0.5) * 5
     })
 
     const pick = eligible[0]
     assignments[pick].players.push(player)
-    outfieldFvm[pick] += player.fvm ?? 0
+    totalFvm[pick] += player.fvm ?? 0
     remaining[pick][role]--
   }
 }
@@ -118,15 +116,13 @@ function generateSingleDraft(
   return { assignments }
 }
 
-// Calcola FVM outfield (esclude portieri)
-function outfieldFvm(a: DraftTeamAssignment): number {
-  return a.players
-    .filter(p => p.primary_role !== 'Por')
-    .reduce((s, p) => s + (p.fvm ?? 0), 0)
+// FVM totale rosa (portieri inclusi)
+function totalRosterFvm(a: DraftTeamAssignment): number {
+  return a.players.reduce((s, p) => s + (p.fvm ?? 0), 0)
 }
 
-// Best-of-N: genera 100 sorteggi candidati, ritorna quello con minor range FVM outfield.
-// Casualità preservata (ogni run è random), ma scegliamo il più equo.
+// Best-of-N: genera 100 sorteggi candidati, ritorna quello con minor range FVM totale.
+// Bilancia il totale (compresi i portieri assegnati casualmente).
 export function generateDraft(
   bocceastaTeams: Team[],
   rawPlayers: Parameters<typeof generateSingleDraft>[1]
@@ -137,7 +133,7 @@ export function generateDraft(
 
   for (let i = 0; i < N_CANDIDATES; i++) {
     const candidate = generateSingleDraft(bocceastaTeams, rawPlayers)
-    const fvms = candidate.assignments.map(outfieldFvm)
+    const fvms = candidate.assignments.map(totalRosterFvm)
     const spread = Math.max(...fvms) - Math.min(...fvms)
     if (spread < bestSpread) {
       bestSpread = spread
