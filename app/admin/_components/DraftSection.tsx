@@ -38,7 +38,7 @@ export function DraftSection({ teams, players }: Props) {
     if (!draft) return
     if (!confirm(`Applicare l'assegnazione? Sovrascrive tutte le rose attuali.`)) return
     const assignments = draft.assignments.flatMap(a =>
-      a.players.map(p => ({ playerId: p.id, teamId: a.team.id }))
+      a.players.map(p => ({ playerId: p.id, teamId: a.team.id, fvm: p.fvm }))
     )
     startTransition(async () => {
       const r = await applyDraft(assignments)
@@ -103,11 +103,11 @@ export function DraftSection({ teams, players }: Props) {
                 <thead>
                   <tr className="border-b bg-gray-50">
                     <th className="text-left px-3 py-2 font-medium">Squadra</th>
-                    <th className="text-right px-2 py-2">Tot</th>
-                    <th className="text-right px-2 py-2 text-yellow-600">FVM</th>
-                    <th className="text-right px-2 py-2 text-orange-400">Por</th>
+                    <th className="text-right px-2 py-2">Por</th>
+                    <th className="text-right px-2 py-2">Mov</th>
+                    <th className="text-right px-2 py-2 text-yellow-600">FVM tot</th>
+                    <th className="text-right px-2 py-2 text-green-600">Budget</th>
                     <th className="text-right px-2 py-2 text-blue-500">Dif</th>
-                    <th className="text-right px-2 py-2 text-cyan-500">E</th>
                     <th className="text-right px-2 py-2 text-green-600">Mid</th>
                     <th className="text-right px-2 py-2 text-purple-500">T/W</th>
                     <th className="text-right px-2 py-2 text-red-500">Att</th>
@@ -123,12 +123,14 @@ export function DraftSection({ teams, players }: Props) {
                         onClick={() => setSelectedTeam(a.team.id)}
                       >
                         <td className="px-3 py-1.5 font-medium truncate max-w-[120px]">{a.team.team_name}</td>
-                        <td className="text-right px-2 py-1.5 font-bold">{s.total}</td>
+                        <td className="text-right px-2 py-1.5">{s.byRole['Por'] ?? 0}</td>
+                        <td className="text-right px-2 py-1.5 font-bold">{s.outfieldCount}</td>
                         <td className="text-right px-2 py-1.5 text-yellow-600 font-semibold">{s.fvmTotal}</td>
-                        <td className="text-right px-2 py-1.5">{(s.byRole['Por'] ?? 0)}</td>
-                        <td className="text-right px-2 py-1.5">{(s.byRole['Dc'] ?? 0) + (s.byRole['B'] ?? 0)}</td>
-                        <td className="text-right px-2 py-1.5">{(s.byRole['Dd'] ?? 0) + (s.byRole['Ds'] ?? 0) + (s.byRole['E'] ?? 0)}</td>
-                        <td className="text-right px-2 py-1.5">{(s.byRole['M'] ?? 0) + (s.byRole['C'] ?? 0)}</td>
+                        <td className={`text-right px-2 py-1.5 font-semibold ${s.budgetRemaining < 0 ? 'text-red-500' : 'text-green-600'}`}>
+                          {s.budgetRemaining}
+                        </td>
+                        <td className="text-right px-2 py-1.5">{(s.byRole['Dc'] ?? 0) + (s.byRole['B'] ?? 0) + (s.byRole['Dd'] ?? 0) + (s.byRole['Ds'] ?? 0)}</td>
+                        <td className="text-right px-2 py-1.5">{(s.byRole['E'] ?? 0) + (s.byRole['M'] ?? 0) + (s.byRole['C'] ?? 0)}</td>
                         <td className="text-right px-2 py-1.5">{(s.byRole['T'] ?? 0) + (s.byRole['W'] ?? 0)}</td>
                         <td className="text-right px-2 py-1.5">{(s.byRole['A'] ?? 0) + (s.byRole['Pc'] ?? 0)}</td>
                       </tr>

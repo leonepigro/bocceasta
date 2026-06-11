@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 export type ApplyAssignment = {
   playerId: number
   teamId: string
+  fvm: number | null
 }
 
 export async function applyDraft(assignments: ApplyAssignment[]) {
@@ -21,10 +22,10 @@ export async function applyDraft(assignments: ApplyAssignment[]) {
   const errors: string[] = []
   for (let i = 0; i < assignments.length; i += 100) {
     const batch = assignments.slice(i, i + 100)
-    for (const { playerId, teamId } of batch) {
+    for (const { playerId, teamId, fvm } of batch) {
       const { error } = await service
         .from('players')
-        .update({ is_sold: true, sold_to_team_id: teamId, sold_price: 1 })
+        .update({ is_sold: true, sold_to_team_id: teamId, sold_price: fvm ?? 1 })
         .eq('id', playerId)
       if (error) errors.push(`Player ${playerId}: ${error.message}`)
     }
