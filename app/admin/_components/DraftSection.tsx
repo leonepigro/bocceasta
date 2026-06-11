@@ -152,7 +152,7 @@ export function DraftSection({ teams, players, activeDraft }: Props) {
       )}
 
       {/* Riepilogo bilanciamento — visibile dopo esecuzione */}
-      {isBlocked && activeDraft?.result && <DraftSummaryTable draft={activeDraft.result as DraftResult} sessionId={activeDraft.id} />}
+      {isBlocked && !!activeDraft?.result && <DraftSummaryTable draft={activeDraft!.result as DraftResult} sessionId={activeDraft!.id} />}
 
       {/* Info struttura sorteggio */}
       <details className="border rounded-lg">
