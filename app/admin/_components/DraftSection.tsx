@@ -23,6 +23,7 @@ export function DraftSection({ teams, players }: Props) {
   const [lockedId, setLockedId] = useState<string | null>(null)
   const [lockedAt, setLockedAt] = useState<string | null>(null)
   const [applyResult, setApplyResult] = useState<{ assigned?: number; error?: string } | null>(null)
+  const [season, setSeason] = useState('2025/26 — Giornata 1')
 
   function generate() {
     if (lockedId) return
@@ -31,11 +32,19 @@ export function DraftSection({ teams, players }: Props) {
     setApplyResult(null)
   }
 
+  function newRound() {
+    setDraft(null)
+    setLockedId(null)
+    setLockedAt(null)
+    setApplyResult(null)
+    setSelectedTeam(null)
+  }
+
   function handleLock() {
     if (!draft || lockedId) return
     if (!confirm('Bloccare il sorteggio? Non potrai più rigenerarlo.')) return
     startTransition(async () => {
-      const r = await lockDraft(draft, '2025/26')
+      const r = await lockDraft(draft, season)
       if ('error' in r) { alert(r.error); return }
       setLockedId(r.id)
       setLockedAt(new Date().toISOString())
@@ -65,6 +74,16 @@ export function DraftSection({ teams, players }: Props) {
         </p>
       </div>
 
+      {/* Campo stagione/giornata */}
+      {!lockedId && (
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-gray-500 flex-shrink-0">Etichetta:</label>
+          <input value={season} onChange={e => setSeason(e.target.value)}
+            className="border rounded px-2 py-1 text-sm flex-1 max-w-xs"
+            placeholder="es. 2025/26 — Giornata 1" />
+        </div>
+      )}
+
       {/* Stato blocco */}
       {lockedId && (
         <div className="p-3 bg-green-50 border border-green-200 rounded-lg space-y-2">
@@ -84,12 +103,18 @@ export function DraftSection({ teams, players }: Props) {
               Copia
             </button>
           </div>
-          {!applyResult && (
-            <button onClick={handleApply} disabled={isPending}
-              className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold disabled:opacity-50">
-              {isPending ? 'Applico...' : '✓ Applica assegnazione'}
+          <div className="flex gap-2 flex-wrap">
+            {!applyResult && (
+              <button onClick={handleApply} disabled={isPending}
+                className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold disabled:opacity-50">
+                {isPending ? 'Applico...' : '✓ Applica assegnazione'}
+              </button>
+            )}
+            <button onClick={newRound}
+              className="border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-50">
+              + Nuovo sorteggio (Giornata 2)
             </button>
-          )}
+          </div>
           {applyResult && (
             <p className={`text-sm font-semibold ${applyResult.error ? 'text-red-600' : 'text-green-700'}`}>
               {applyResult.error ?? `✓ ${applyResult.assigned} giocatori assegnati`}
