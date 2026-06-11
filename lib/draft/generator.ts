@@ -94,11 +94,14 @@ export function generateDraft(
     for (const gk of gks) { assignments[i].players.push(gk); assignedIds.add(gk.id) }
   }
 
-  // ─── OUTFIELD: per ogni ruolo, batch bilanciati per FVM ────────
+  // ─── OUTFIELD: per ogni ruolo, ordine team shufflato a sorte, poi batch bilanciati ──
   for (const role of OUTFIELD_ROLES) {
     const pool = players
       .filter(p => p.primary_role === role && !assignedIds.has(p.id))
-    balancedDistribute(pool, assignments)
+    // Shuffle dell'ordine team: la casualità sta in chi parte per primo per ogni ruolo
+    const roleAssignments = shuffle([...Array(assignments.length).keys()])
+      .map(i => assignments[i])
+    balancedDistribute(pool, roleAssignments)
     pool.forEach(p => assignedIds.add(p.id))
   }
 
