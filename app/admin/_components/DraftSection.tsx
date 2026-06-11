@@ -6,7 +6,8 @@ import type { Team } from '@/lib/supabase/types'
 import { scheduleDraft, applyLockedDraft } from '@/lib/draft/session-actions'
 
 type RawPlayer = { id: number; name: string; roles: string[]; fvm: number | null; serie_a_team: string | null }
-type Props = { teams: Team[]; players: RawPlayer[] }
+type ActiveDraft = { id: string; season: string; scheduled_at: string | null; locked_at: string | null; applied_at: string | null } | null
+type Props = { teams: Team[]; players: RawPlayer[]; activeDraft: ActiveDraft }
 
 const ROLE_COLOR: Record<string, string> = {
   Por: '#f59e0b', Dc: '#3b82f6', B: '#3b82f6', Dd: '#60a5fa', Ds: '#60a5fa',
@@ -14,17 +15,23 @@ const ROLE_COLOR: Record<string, string> = {
   A: '#ef4444', Pc: '#ef4444',
 }
 
-export function DraftSection({ teams, players }: Props) {
+export function DraftSection({ teams, players, activeDraft }: Props) {
   const [isPending, startTransition] = useTransition()
 
   // Scheduling
   const [season, setSeason] = useState('2025/26 — Giornata 1')
   const [hours, setHours] = useState(24)
-  const [scheduled, setScheduled] = useState<{ id: string; at: string } | null>(null)
+  const [scheduled, setScheduled] = useState<{ id: string; at: string } | null>(
+    activeDraft && !activeDraft.applied_at
+      ? { id: activeDraft.id, at: activeDraft.scheduled_at ?? '' }
+      : null
+  )
 
   // Post-esecuzione
-  const [applySessionId, setApplySessionId] = useState<string | null>(null)
+  const [applySessionId, setApplySessionId] = useState<string | null>(activeDraft?.id ?? null)
   const [applyResult, setApplyResult] = useState<{ assigned?: number; error?: string } | null>(null)
+
+  const isBlocked = !!scheduled  // bloccato se c'è una sessione attiva
 
   function handleSchedule() {
     if (!confirm(`Programmare il sorteggio "${season}" tra ${hours} ore?\nNon potrai annullarlo.`)) return
@@ -66,7 +73,7 @@ export function DraftSection({ teams, players }: Props) {
       )}
 
       {/* Programmazione */}
-      {!scheduled && (
+      {!isBlocked && (
         <div className="border rounded-lg p-4 space-y-3">
           <h3 className="text-sm font-semibold">Programma nuovo sorteggio</h3>
           <div className="space-y-2">
@@ -100,8 +107,8 @@ export function DraftSection({ teams, players }: Props) {
         </div>
       )}
 
-      {/* Sorteggio programmato */}
-      {scheduled && (
+      {/* Sorteggio in corso o programmato */}
+      {isBlocked && scheduled && (
         <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-3">
           <p className="text-blue-700 font-semibold text-sm">
             ⏱ Sorteggio programmato: <strong>{season}</strong>

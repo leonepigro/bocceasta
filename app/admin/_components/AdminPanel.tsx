@@ -23,15 +23,17 @@ type AuctionRow = {
 }
 
 type RawPlayer = { id: number; name: string; roles: string[]; fvm: number | null; serie_a_team: string | null }
+type ActiveDraft = { id: string; season: string; scheduled_at: string | null; locked_at: string | null; applied_at: string | null } | null
 
 type Props = {
   config: Config | null
   teams: Team[]
   auctions: AuctionRow[]
   players: RawPlayer[]
+  activeDraft: ActiveDraft
 }
 
-export default function AdminPanel({ config, teams, auctions, players }: Props) {
+export default function AdminPanel({ config, teams, auctions, players, activeDraft }: Props) {
   const [active, setActive] = useState<Section>('import')
 
   return (
@@ -58,7 +60,7 @@ export default function AdminPanel({ config, teams, auctions, players }: Props) 
           {active === 'teams' && <TeamsSection teams={teams} />}
           {active === 'export' && <ExportSection />}
           {active === 'fantacalcio' && <FantacalcioSection teams={teams} />}
-          {active === 'draft' && <DraftSection teams={teams} players={players} />}
+          {active === 'draft' && <DraftSection teams={teams} players={players} activeDraft={activeDraft} />}
         </main>
       </div>
     </div>

@@ -10,7 +10,7 @@ export default async function AdminPage() {
   const isAdmin = user.user_metadata?.role === 'admin'
   if (!isAdmin) redirect('/dashboard')
 
-  const [{ data: config }, { data: teams }, { data: auctions }, { data: players }] = await Promise.all([
+  const [{ data: config }, { data: teams }, { data: auctions }, { data: players }, { data: activeDraft }] = await Promise.all([
     supabase.from('config').select('*').eq('id', 1).single(),
     supabase.from('teams').select('*').order('team_name'),
     supabase
@@ -19,6 +19,13 @@ export default async function AdminPage() {
       .eq('status', 'active')
       .order('expires_at'),
     supabase.from('players').select('id, name, roles, fvm, serie_a_team').order('fvm', { ascending: false }),
+    supabase
+      .from('draft_sessions')
+      .select('id, season, scheduled_at, locked_at, applied_at')
+      .is('applied_at', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ])
 
   return (
@@ -27,6 +34,7 @@ export default async function AdminPage() {
       teams={teams ?? []}
       auctions={(auctions ?? []) as Parameters<typeof AdminPanel>[0]['auctions']}
       players={(players ?? []) as Parameters<typeof AdminPanel>[0]['players']}
+      activeDraft={activeDraft ?? null}
     />
   )
 }
