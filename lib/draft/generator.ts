@@ -19,10 +19,7 @@ export type DraftResult = {
   assignments: DraftTeamAssignment[]
 }
 
-const GK_PER_TEAM = 2
-// Ruoli distribuiti dal più alto FVM al più basso: prima i top player (Pc, A) che
-// creano più varianza — il bilanciamento li compensa subito. Ultimi i difensori
-// (FVM basso, varianza minima) dove l'effetto sull'equilibrio è trascurabile.
+// Tutti i ruoli outfield — l'ordine non conta più, la distribuzione è globale per FVM
 const OUTFIELD_ROLES = ['Pc', 'A', 'T', 'W', 'M', 'C', 'E', 'Dc', 'B', 'Dd', 'Ds']
 
 function shuffle<T>(arr: T[]): T[] {
@@ -34,35 +31,48 @@ function shuffle<T>(arr: T[]): T[] {
   return a
 }
 
-function sumFvm(players: DraftPlayer[]): number {
-  return players.reduce((s, p) => s + (p.fvm ?? 0), 0)
-}
-
-// Distribuisce pool in batch da n.
-// outfieldFvm[i] traccia solo il FVM degli outfield: esclude portieri (assegnati casualmente)
-// per non distorcere il bilanciamento.
-function balancedDistribute(
-  pool: DraftPlayer[],
-  assignments: DraftTeamAssignment[],
-  outfieldFvm: number[]
+// Assegnazione globale per FVM: tutti i giocatori outfield ordinati FVM desc,
+// ogni giocatore va al team con outfield FVM più basso che ha ancora slot per quel ruolo.
+// Garantisce che i top player vadano a team diversi indipendentemente dal ruolo.
+function globalBalancedDistribute(
+  allOutfield: DraftPlayer[],
+  assignments: DraftTeamAssignment[]
 ): void {
   const n = assignments.length
-  const rounds = Math.floor(pool.length / n)
-  const take = rounds * n
-  const sorted = [...pool]
-    .sort((a, b) => (b.fvm ?? 0) - (a.fvm ?? 0))
-    .slice(0, take)
 
-  for (let i = 0; i < take; i += n) {
-    const batch = sorted.slice(i, i + n)
-    const order = [...Array(n).keys()].sort((a, b) => {
+  // Calcola quanti slot per ruolo per team (floor = uguale per tutti)
+  const roleCounts: Record<string, number> = {}
+  for (const p of allOutfield) roleCounts[p.primary_role] = (roleCounts[p.primary_role] ?? 0) + 1
+  const roleTarget: Record<string, number> = {}
+  for (const [role, cnt] of Object.entries(roleCounts)) roleTarget[role] = Math.floor(cnt / n)
+
+  // Slot rimanenti per ruolo per team: remaining[teamIdx][role]
+  const remaining: Record<string, number>[] = Array.from({ length: n }, () =>
+    Object.fromEntries(Object.entries(roleTarget).map(([r, t]) => [r, t]))
+  )
+
+  const outfieldFvm = new Array(n).fill(0)
+
+  // Ordina globalmente per FVM desc
+  const sorted = [...allOutfield].sort((a, b) => (b.fvm ?? 0) - (a.fvm ?? 0))
+
+  for (const player of sorted) {
+    const role = player.primary_role
+
+    // Team eligibili: hanno ancora slot per questo ruolo
+    const eligible = [...Array(n).keys()].filter(i => (remaining[i][role] ?? 0) > 0)
+    if (eligible.length === 0) continue
+
+    // Ordina per outfield FVM crescente con tie-breaking casuale entro 30 FVM
+    eligible.sort((a, b) => {
       const diff = outfieldFvm[a] - outfieldFvm[b]
       return Math.abs(diff) < 30 ? diff + (Math.random() - 0.5) * 40 : diff
     })
-    batch.forEach((player, j) => {
-      assignments[order[j]].players.push(player)
-      outfieldFvm[order[j]] += player.fvm ?? 0
-    })
+
+    const pick = eligible[0]
+    assignments[pick].players.push(player)
+    outfieldFvm[pick] += player.fvm ?? 0
+    remaining[pick][role]--
   }
 }
 
@@ -100,25 +110,18 @@ export function generateDraft(
     for (const gk of gks) { assignments[i].players.push(gk); assignedIds.add(gk.id) }
   }
 
-  // outfieldFvm[i] = FVM solo degli outfield — esclude portieri per non distorcere il bilanciamento
-  const outfieldFvm = new Array(n).fill(0)
-
-  // ─── OUTFIELD: per ogni ruolo, ordine team shufflato a sorte, poi batch bilanciati ──
-  for (const role of OUTFIELD_ROLES) {
-    const pool = players
-      .filter(p => p.primary_role === role && !assignedIds.has(p.id))
-    // Shuffle → mappa gli indici originali per mantenere il link a outfieldFvm[i]
-    const shuffledIdx = shuffle([...Array(n).keys()])
-    const roleAssignments = shuffledIdx.map(i => assignments[i])
-    const roleOutfieldFvm = shuffledIdx.map(i => outfieldFvm[i])
-    balancedDistribute(pool, roleAssignments, roleOutfieldFvm)
-    // Riscrivi outfieldFvm originale con i valori aggiornati
-    shuffledIdx.forEach((origIdx, j) => { outfieldFvm[origIdx] = roleOutfieldFvm[j] })
-    pool.forEach(p => assignedIds.add(p.id))
-  }
+  // ─── OUTFIELD: distribuzione globale per FVM su tutti i ruoli insieme ───
+  // Top player vanno a team diversi indipendentemente dal ruolo,
+  // perché si compete sullo stesso outfieldFvm.
+  const allOutfield = players.filter(p =>
+    OUTFIELD_ROLES.includes(p.primary_role) && !assignedIds.has(p.id)
+  )
+  globalBalancedDistribute(allOutfield, assignments)
+  allOutfield.forEach(p => assignedIds.add(p.id))
 
   return { assignments }
 }
+
 
 export function draftStats(assignment: DraftTeamAssignment) {
   const byRole: Record<string, number> = {}
