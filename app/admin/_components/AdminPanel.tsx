@@ -9,9 +9,10 @@ import { AuctionsSection } from './AuctionsSection'
 import { TeamsSection } from './TeamsSection'
 import { ExportSection } from './ExportSection'
 import { FantacalcioSection } from './FantacalcioSection'
+import { DraftSection } from './DraftSection'
 import type { Config, Team } from '@/lib/supabase/types'
 
-type Section = 'import' | 'roles' | 'config' | 'auctions' | 'teams' | 'export' | 'fantacalcio'
+type Section = 'import' | 'roles' | 'config' | 'auctions' | 'teams' | 'export' | 'fantacalcio' | 'draft'
 
 type AuctionRow = {
   id: string
@@ -21,13 +22,16 @@ type AuctionRow = {
   teams_winner: { team_name: string } | null
 }
 
+type RawPlayer = { id: number; name: string; roles: string[]; fvm: number | null; serie_a_team: string | null }
+
 type Props = {
   config: Config | null
   teams: Team[]
   auctions: AuctionRow[]
+  players: RawPlayer[]
 }
 
-export default function AdminPanel({ config, teams, auctions }: Props) {
+export default function AdminPanel({ config, teams, auctions, players }: Props) {
   const [active, setActive] = useState<Section>('import')
 
   return (
@@ -54,6 +58,7 @@ export default function AdminPanel({ config, teams, auctions }: Props) {
           {active === 'teams' && <TeamsSection teams={teams} />}
           {active === 'export' && <ExportSection />}
           {active === 'fantacalcio' && <FantacalcioSection teams={teams} />}
+          {active === 'draft' && <DraftSection teams={teams} players={players} />}
         </main>
       </div>
     </div>
