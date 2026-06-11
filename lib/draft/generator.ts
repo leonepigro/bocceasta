@@ -63,10 +63,10 @@ function globalBalancedDistribute(
     const eligible = [...Array(n).keys()].filter(i => (remaining[i][role] ?? 0) > 0)
     if (eligible.length === 0) continue
 
-    // Ordina per outfield FVM crescente con tie-breaking casuale entro 30 FVM
+    // Ordina per outfield FVM crescente con piccolo rumore (tie-breaking casuale)
     eligible.sort((a, b) => {
       const diff = outfieldFvm[a] - outfieldFvm[b]
-      return Math.abs(diff) < 30 ? diff + (Math.random() - 0.5) * 40 : diff
+      return diff + (Math.random() - 0.5) * 5
     })
 
     const pick = eligible[0]
@@ -76,12 +76,11 @@ function globalBalancedDistribute(
   }
 }
 
-export function generateDraft(
+function generateSingleDraft(
   bocceastaTeams: Team[],
   rawPlayers: { id: number; name: string; roles: string[]; fvm: number | null; serie_a_team: string | null }[]
 ): DraftResult {
   const n = bocceastaTeams.length
-  // Shuffle team order solo per i portieri (assegnazione squadre Serie A)
   const teams = shuffle([...bocceastaTeams])
   const assignments: DraftTeamAssignment[] = teams.map(t => ({
     team: t, players: [], gk_serie_a_teams: [],
@@ -93,7 +92,7 @@ export function generateDraft(
 
   const assignedIds = new Set<number>()
 
-  // ─── PORTIERI: top 2 FVM dalle 2 squadre Serie A sorteggiate ───
+  // ─── PORTIERI ───
   const porPlayers = players
     .filter(p => p.primary_role === 'Por')
     .sort((a, b) => (b.fvm ?? 0) - (a.fvm ?? 0))
@@ -105,14 +104,11 @@ export function generateDraft(
   for (let i = 0; i < n; i++) {
     const assigned = [serieATeams[i * 2], serieATeams[i * 2 + 1]].filter(Boolean)
     assignments[i].gk_serie_a_teams = assigned
-    const gks = porPlayers
-      .filter(p => assigned.includes(p.serie_a_team ?? ''))
+    const gks = porPlayers.filter(p => assigned.includes(p.serie_a_team ?? ''))
     for (const gk of gks) { assignments[i].players.push(gk); assignedIds.add(gk.id) }
   }
 
-  // ─── OUTFIELD: distribuzione globale per FVM su tutti i ruoli insieme ───
-  // Top player vanno a team diversi indipendentemente dal ruolo,
-  // perché si compete sullo stesso outfieldFvm.
+  // ─── OUTFIELD ───
   const allOutfield = players.filter(p =>
     OUTFIELD_ROLES.includes(p.primary_role) && !assignedIds.has(p.id)
   )
@@ -120,6 +116,36 @@ export function generateDraft(
   allOutfield.forEach(p => assignedIds.add(p.id))
 
   return { assignments }
+}
+
+// Calcola FVM outfield (esclude portieri)
+function outfieldFvm(a: DraftTeamAssignment): number {
+  return a.players
+    .filter(p => p.primary_role !== 'Por')
+    .reduce((s, p) => s + (p.fvm ?? 0), 0)
+}
+
+// Best-of-N: genera 100 sorteggi candidati, ritorna quello con minor range FVM outfield.
+// Casualità preservata (ogni run è random), ma scegliamo il più equo.
+export function generateDraft(
+  bocceastaTeams: Team[],
+  rawPlayers: Parameters<typeof generateSingleDraft>[1]
+): DraftResult {
+  const N_CANDIDATES = 100
+  let best: DraftResult | null = null
+  let bestSpread = Infinity
+
+  for (let i = 0; i < N_CANDIDATES; i++) {
+    const candidate = generateSingleDraft(bocceastaTeams, rawPlayers)
+    const fvms = candidate.assignments.map(outfieldFvm)
+    const spread = Math.max(...fvms) - Math.min(...fvms)
+    if (spread < bestSpread) {
+      bestSpread = spread
+      best = candidate
+    }
+  }
+
+  return best!
 }
 
 
