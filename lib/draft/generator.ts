@@ -19,8 +19,8 @@ export type DraftResult = {
   assignments: DraftTeamAssignment[]
 }
 
-// Tutti i ruoli outfield — l'ordine non conta più, la distribuzione è globale per FVM
-const OUTFIELD_ROLES = ['Pc', 'A', 'T', 'W', 'M', 'C', 'E', 'Dc', 'B', 'Dd', 'Ds']
+// Tutti i ruoli, portieri inclusi. Distribuzione globale per Quotazione (FVM).
+const ALL_ROLES = ['Por', 'Pc', 'A', 'T', 'W', 'M', 'C', 'E', 'Dc', 'B', 'Dd', 'Ds']
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr]
@@ -31,17 +31,17 @@ function shuffle<T>(arr: T[]): T[] {
   return a
 }
 
-// Assegnazione globale per FVM: tutti i giocatori outfield ordinati FVM desc,
-// ogni giocatore va al team con TOTALE FVM più basso (portieri inclusi).
-// I portieri sono già stati assegnati casualmente → chi ha portieri ricchi riceve outfield poveri.
+// Distribuzione globale per Quotazione: tutti i giocatori (portieri inclusi)
+// ordinati per FVM desc, ogni giocatore va al team con totale FVM più basso
+// e che ha ancora slot per quel ruolo. Garantisce equità totale.
 function globalBalancedDistribute(
-  allOutfield: DraftPlayer[],
+  allPlayers: DraftPlayer[],
   assignments: DraftTeamAssignment[]
 ): void {
   const n = assignments.length
 
   const roleCounts: Record<string, number> = {}
-  for (const p of allOutfield) roleCounts[p.primary_role] = (roleCounts[p.primary_role] ?? 0) + 1
+  for (const p of allPlayers) roleCounts[p.primary_role] = (roleCounts[p.primary_role] ?? 0) + 1
   const roleTarget: Record<string, number> = {}
   for (const [role, cnt] of Object.entries(roleCounts)) roleTarget[role] = Math.floor(cnt / n)
 
@@ -49,12 +49,9 @@ function globalBalancedDistribute(
     Object.fromEntries(Object.entries(roleTarget).map(([r, t]) => [r, t]))
   )
 
-  // Inizializza con FVM portieri già assegnati: questo compensa lo squilibrio iniziale
-  const totalFvm: number[] = assignments.map(a =>
-    a.players.reduce((s, p) => s + (p.fvm ?? 0), 0)
-  )
+  const totalFvm: number[] = new Array(n).fill(0)
 
-  const sorted = [...allOutfield].sort((a, b) => (b.fvm ?? 0) - (a.fvm ?? 0))
+  const sorted = [...allPlayers].sort((a, b) => (b.fvm ?? 0) - (a.fvm ?? 0))
 
   for (const player of sorted) {
     const role = player.primary_role
@@ -78,7 +75,6 @@ function generateSingleDraft(
   bocceastaTeams: Team[],
   rawPlayers: { id: number; name: string; roles: string[]; fvm: number | null; serie_a_team: string | null }[]
 ): DraftResult {
-  const n = bocceastaTeams.length
   const teams = shuffle([...bocceastaTeams])
   const assignments: DraftTeamAssignment[] = teams.map(t => ({
     team: t, players: [], gk_serie_a_teams: [],
@@ -88,30 +84,19 @@ function generateSingleDraft(
     .filter(p => p.roles.length > 0)
     .map(p => ({ ...p, primary_role: p.roles[0] }))
 
-  const assignedIds = new Set<number>()
+  // Distribuzione unica per tutti i ruoli (portieri inclusi), bilanciata per Quotazione
+  const allEligible = players.filter(p => ALL_ROLES.includes(p.primary_role))
+  globalBalancedDistribute(allEligible, assignments)
 
-  // ─── PORTIERI ───
-  const porPlayers = players
-    .filter(p => p.primary_role === 'Por')
-    .sort((a, b) => (b.fvm ?? 0) - (a.fvm ?? 0))
-
-  const serieATeams = shuffle(
-    [...new Set(porPlayers.map(p => p.serie_a_team).filter(Boolean) as string[])]
-  )
-
-  for (let i = 0; i < n; i++) {
-    const assigned = [serieATeams[i * 2], serieATeams[i * 2 + 1]].filter(Boolean)
-    assignments[i].gk_serie_a_teams = assigned
-    const gks = porPlayers.filter(p => assigned.includes(p.serie_a_team ?? ''))
-    for (const gk of gks) { assignments[i].players.push(gk); assignedIds.add(gk.id) }
+  // Calcola squadre Serie A per i portieri assegnati (solo per visualizzazione)
+  for (const a of assignments) {
+    a.gk_serie_a_teams = [...new Set(
+      a.players
+        .filter(p => p.primary_role === 'Por')
+        .map(p => p.serie_a_team)
+        .filter(Boolean) as string[]
+    )]
   }
-
-  // ─── OUTFIELD ───
-  const allOutfield = players.filter(p =>
-    OUTFIELD_ROLES.includes(p.primary_role) && !assignedIds.has(p.id)
-  )
-  globalBalancedDistribute(allOutfield, assignments)
-  allOutfield.forEach(p => assignedIds.add(p.id))
 
   return { assignments }
 }

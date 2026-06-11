@@ -84,7 +84,7 @@ export function DraftReveal({ draft }: { draft: DraftResult }) {
                 <span className="font-semibold text-sm">{t.name}</span>
                 <div className="flex gap-3 text-xs text-gray-500">
                   <span>{t.players.length} gioc.</span>
-                  <span className="font-bold" style={{ color: 'var(--boccea-gold)' }}>FVM {t.fvmTotal}</span>
+                  <span className="font-bold" style={{ color: 'var(--boccea-gold)' }}>Quotazione {t.fvmTotal}</span>
                 </div>
               </summary>
               <div className="divide-y border-t">
@@ -141,7 +141,7 @@ export function DraftReveal({ draft }: { draft: DraftResult }) {
               style={{ background: ROLE_COLOR[current.event.player.primary_role] }}>
               {current.event.player.primary_role}
             </span>
-            {current.event.player.serie_a_team} · FVM {current.event.player.fvm ?? '—'}
+            {current.event.player.serie_a_team} · Quotazione {current.event.player.fvm ?? '—'}
           </p>
         </div>
       )}

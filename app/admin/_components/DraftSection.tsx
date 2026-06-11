@@ -204,10 +204,10 @@ export function DraftSection({ teams, players, activeDraft }: Props) {
           Come funziona il sorteggio ▾
         </summary>
         <div className="px-4 pb-4 pt-2 space-y-1 text-xs text-gray-500">
-          <p>• <strong>Portieri</strong>: 20 squadre Serie A sorteggiate a caso, 2 per partecipante. Tutti i loro portieri.</p>
-          <p>• <strong>Ogni ruolo</strong> (Dc, B, Dd, Ds, E, M, C, T, W, A, Pc): giocatori ordinati per FVM.</p>
-          <p>• <strong>Gruppi da 10</strong>: il migliore del gruppo va al partecipante con FVM totale più basso in quel momento.</p>
-          <p>• <strong>Casualità</strong>: l&apos;ordine dei partecipanti viene estratto a sorte per ogni ruolo.</p>
+          <p>• <strong>Tutti i ruoli (portieri inclusi)</strong>: giocatori distribuiti per Quotazione.</p>
+          <p>• <strong>Ogni giocatore</strong>: va al partecipante con Quotazione totale più bassa che ha ancora slot per quel ruolo.</p>
+          <p>• <strong>Best-of-100</strong>: lancio 100 sorteggi candidati, prendo quello con range Quotazione totale più stretto.</p>
+          <p>• <strong>Casualità</strong>: piccolo rumore nel tie-breaking + 100 run indipendenti.</p>
           <p>• <strong>Garanzia</strong>: il sorteggio avviene server-side allo scadere del timer, nessun preview prima del lock.</p>
         </div>
       </details>
@@ -239,7 +239,7 @@ function DraftSummaryTable({ draft, sessionId }: { draft: DraftResult; sessionId
                 <th className="text-left px-3 py-2 font-medium">Squadra</th>
                 <th className="text-right px-2 py-2">Por</th>
                 <th className="text-right px-2 py-2">Mov</th>
-                <th className="text-right px-2 py-2 text-yellow-600">FVM</th>
+                <th className="text-right px-2 py-2 text-yellow-600">Quotaz.</th>
                 <th className="text-right px-2 py-2 text-blue-500">Dif</th>
                 <th className="text-right px-2 py-2 text-green-600">Mid</th>
                 <th className="text-right px-2 py-2 text-purple-500">T/W</th>
