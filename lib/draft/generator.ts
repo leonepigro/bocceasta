@@ -88,11 +88,13 @@ function globalBalancedDistribute(
 
     const fans = wishlist?.get(player.id)
     if (fans && fans.size > 0) {
-      const wishedAndEligible = eligible.filter(i => fans.has(i))
+      // Equità: wishlist applica solo se team è a/sotto la media corrente.
+      // Chi sta accumulando top player non può sforare la media tramite wishlist.
+      const avg = totalFvm.reduce((s, v) => s + v, 0) / n
+      const wishedAndEligible = eligible.filter(i => fans.has(i) && totalFvm[i] <= avg)
       if (wishedAndEligible.length > 0) {
         eligible = wishedAndEligible
         contendersIdx = wishedAndEligible
-        // Conflitto vero = ≥2 team eligibili lo avevano in wishlist
         isConflict = wishedAndEligible.length >= 2
       }
     }
