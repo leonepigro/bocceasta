@@ -23,7 +23,7 @@ type AuctionRow = {
 }
 
 type RawPlayer = { id: number; name: string; roles: string[]; fvm: number | null; serie_a_team: string | null }
-type ActiveDraft = { id: string; season: string; scheduled_at: string | null; locked_at: string | null; applied_at: string | null } | null
+type ActiveDraft = { id: string; season: string; scheduled_at: string | null; locked_at: string | null; applied_at: string | null; result: unknown } | null
 
 type Props = {
   config: Config | null

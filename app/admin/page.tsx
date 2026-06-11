@@ -21,7 +21,7 @@ export default async function AdminPage() {
     supabase.from('players').select('id, name, roles, fvm, serie_a_team').order('fvm', { ascending: false }),
     supabase
       .from('draft_sessions')
-      .select('id, season, scheduled_at, locked_at, applied_at')
+      .select('id, season, scheduled_at, locked_at, applied_at, result')
       .is('applied_at', null)
       .order('created_at', { ascending: false })
       .limit(1)

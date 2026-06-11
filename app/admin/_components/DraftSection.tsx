@@ -1,12 +1,12 @@
 'use client'
 import { useState, useTransition } from 'react'
 import { draftStats } from '@/lib/draft/generator'
-import type { DraftResult } from '@/lib/draft/generator'
+import type { DraftResult, DraftTeamAssignment } from '@/lib/draft/generator'
 import type { Team } from '@/lib/supabase/types'
 import { scheduleDraft, applyLockedDraft } from '@/lib/draft/session-actions'
 
 type RawPlayer = { id: number; name: string; roles: string[]; fvm: number | null; serie_a_team: string | null }
-type ActiveDraft = { id: string; season: string; scheduled_at: string | null; locked_at: string | null; applied_at: string | null } | null
+type ActiveDraft = { id: string; season: string; scheduled_at: string | null; locked_at: string | null; applied_at: string | null; result: unknown } | null
 type Props = { teams: Team[]; players: RawPlayer[]; activeDraft: ActiveDraft }
 
 const ROLE_COLOR: Record<string, string> = {
@@ -150,6 +150,53 @@ export function DraftSection({ teams, players, activeDraft }: Props) {
           )}
         </div>
       )}
+
+      {/* Riepilogo bilanciamento — visibile dopo esecuzione */}
+      {isBlocked && activeDraft?.result && (() => {
+        const draft = activeDraft.result as DraftResult
+        return (
+          <div className="border rounded-lg overflow-hidden">
+            <div className="px-4 py-2 bg-gray-50 border-b flex items-center justify-between">
+              <p className="text-xs font-semibold text-gray-600">Riepilogo bilanciamento</p>
+              <a href={`/sorteggio/${activeDraft.id}`} target="_blank" rel="noreferrer"
+                className="text-xs text-blue-600 underline">Pagina pubblica →</a>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b bg-gray-50">
+                    <th className="text-left px-3 py-2 font-medium">Squadra</th>
+                    <th className="text-right px-2 py-2">Por</th>
+                    <th className="text-right px-2 py-2">Mov</th>
+                    <th className="text-right px-2 py-2 text-yellow-600">FVM</th>
+                    <th className="text-right px-2 py-2 text-blue-500">Dif</th>
+                    <th className="text-right px-2 py-2 text-green-600">Mid</th>
+                    <th className="text-right px-2 py-2 text-purple-500">T/W</th>
+                    <th className="text-right px-2 py-2 text-red-500">Att</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {draft.assignments.map((a: DraftTeamAssignment) => {
+                    const s = draftStats(a)
+                    return (
+                      <tr key={a.team.id} className="border-b hover:bg-gray-50">
+                        <td className="px-3 py-1.5 font-medium truncate max-w-[120px]">{a.team.team_name}</td>
+                        <td className="text-right px-2 py-1.5">{s.byRole['Por'] ?? 0}</td>
+                        <td className="text-right px-2 py-1.5 font-bold">{s.outfieldCount}</td>
+                        <td className="text-right px-2 py-1.5 text-yellow-600 font-semibold">{s.fvmTotal}</td>
+                        <td className="text-right px-2 py-1.5">{(s.byRole['Dc'] ?? 0) + (s.byRole['B'] ?? 0) + (s.byRole['Dd'] ?? 0) + (s.byRole['Ds'] ?? 0)}</td>
+                        <td className="text-right px-2 py-1.5">{(s.byRole['E'] ?? 0) + (s.byRole['M'] ?? 0) + (s.byRole['C'] ?? 0)}</td>
+                        <td className="text-right px-2 py-1.5">{(s.byRole['T'] ?? 0) + (s.byRole['W'] ?? 0)}</td>
+                        <td className="text-right px-2 py-1.5">{(s.byRole['A'] ?? 0) + (s.byRole['Pc'] ?? 0)}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Info struttura sorteggio */}
       <details className="border rounded-lg">
