@@ -35,28 +35,28 @@ function sumFvm(players: DraftPlayer[]): number {
   return players.reduce((s, p) => s + (p.fvm ?? 0), 0)
 }
 
-// Distribuisce i giocatori in batch da n, ordinati per FVM.
-// Dentro ogni batch: estrazione casuale (shuffle) — ogni team prende un giocatore a caso
-// dal gruppo, garantendo che tutti i gruppi vengano distribuiti equamente tra i partecipanti.
+// Per ogni ruolo: prende esattamente floor(pool.length / n) giocatori per team.
+// Ordina per FVM desc, poi assegna il migliore disponibile al team col FVM totale più basso.
+// In caso di parità FVM tra team, l'ordine è quello iniziale (shufflato una volta a sorte).
 function balancedDistribute(
   pool: DraftPlayer[],
   assignments: DraftTeamAssignment[]
 ): void {
   const n = assignments.length
-  const sorted = [...pool].sort((a, b) => (b.fvm ?? 0) - (a.fvm ?? 0))
+  const rounds = Math.floor(pool.length / n)   // uguale per tutti i team
+  const take = rounds * n
+  const sorted = [...pool]
+    .sort((a, b) => (b.fvm ?? 0) - (a.fvm ?? 0))
+    .slice(0, take)
 
-  for (let i = 0; i < sorted.length; i += n) {
+  for (let i = 0; i < take; i += n) {
     const batch = sorted.slice(i, i + n)
-    // Il batch viene shufflato: la casualità sta in quale giocatore specifico prendi.
-    // I team vengono ordinati per FVM crescente: chi ha meno prende per primo dal batch.
-    // Poiché il batch è casuale, prendere "per primo" non significa prendere il migliore.
-    const shuffledBatch = shuffle(batch)
+    // Ordina team per FVM totale crescente (stabile: parità → ordine shuffle iniziale)
     const order = [...Array(n).keys()].sort(
       (a, b) => sumFvm(assignments[a].players) - sumFvm(assignments[b].players)
     )
-    shuffledBatch.forEach((player, j) => {
-      if (j < order.length) assignments[order[j]].players.push(player)
-    })
+    // Assegna best → lowest, second → second-lowest, ecc.
+    batch.forEach((player, j) => assignments[order[j]].players.push(player))
   }
 }
 
