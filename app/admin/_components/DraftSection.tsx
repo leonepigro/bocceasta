@@ -3,7 +3,7 @@ import { useState, useTransition } from 'react'
 import { draftStats } from '@/lib/draft/generator'
 import type { DraftResult, DraftTeamAssignment } from '@/lib/draft/generator'
 import type { Team } from '@/lib/supabase/types'
-import { scheduleDraft, applyLockedDraft } from '@/lib/draft/session-actions'
+import { scheduleDraft, startApplyDraft, applyDraftBatch, finalizeDraftApply } from '@/lib/draft/session-actions'
 
 type RawPlayer = { id: number; name: string; roles: string[]; fvm: number | null; serie_a_team: string | null }
 type ActiveDraft = { id: string; season: string; scheduled_at: string | null; locked_at: string | null; applied_at: string | null; result: unknown } | null
@@ -19,7 +19,7 @@ export function DraftSection({ teams, players, activeDraft }: Props) {
   const [isPending, startTransition] = useTransition()
 
   // Scheduling
-  const [season, setSeason] = useState('2025/26 — Giornata 1')
+  const [season, setSeason] = useState('2026/27 — Giornata ##')
   const [hours, setHours] = useState(24)
   const [scheduled, setScheduled] = useState<{ id: string; at: string } | null>(
     activeDraft && !activeDraft.applied_at
@@ -30,6 +30,7 @@ export function DraftSection({ teams, players, activeDraft }: Props) {
   // Post-esecuzione
   const [applySessionId, setApplySessionId] = useState<string | null>(activeDraft?.id ?? null)
   const [applyResult, setApplyResult] = useState<{ assigned?: number; error?: string } | null>(null)
+  const [applyProgress, setApplyProgress] = useState<{ done: number; total: number } | null>(null)
 
   const isBlocked = !!scheduled  // bloccato se c'è una sessione attiva
 
@@ -43,13 +44,40 @@ export function DraftSection({ teams, players, activeDraft }: Props) {
     })
   }
 
-  function handleApply() {
-    if (!applySessionId) return
+  async function handleApply() {
+    if (!applySessionId || !activeDraft?.result) return
     if (!confirm('Applicare le rose? Sovrascrive tutte le assegnazioni attuali.')) return
-    startTransition(async () => {
-      const r = await applyLockedDraft(applySessionId)
-      setApplyResult('error' in r ? { error: r.error } : { assigned: r.assigned })
-    })
+
+    setApplyProgress(null)
+    setApplyResult(null)
+
+    // 1. Reset + ottieni totale
+    const start = await startApplyDraft(applySessionId)
+    if ('error' in start) { setApplyResult({ error: start.error }); return }
+    const total = start.total ?? 0
+
+    // 2. Prepara tutti gli assignment
+    const draft = activeDraft.result as DraftResult
+    const all = draft.assignments.flatMap(a =>
+      a.players.map(p => ({ playerId: p.id, teamId: a.team.id, fvm: p.fvm }))
+    )
+
+    // 3. Apply a batch da 30
+    const BATCH = 30
+    let done = 0
+    setApplyProgress({ done: 0, total })
+
+    for (let i = 0; i < all.length; i += BATCH) {
+      const batch = all.slice(i, i + BATCH)
+      await applyDraftBatch(applySessionId, batch)
+      done += batch.length
+      setApplyProgress({ done, total })
+    }
+
+    // 4. Finalizza
+    await finalizeDraftApply(applySessionId)
+    setApplyProgress(null)
+    setApplyResult({ assigned: done })
   }
 
   function newRound() {
@@ -131,11 +159,27 @@ export function DraftSection({ teams, players, activeDraft }: Props) {
               Copia link
             </button>
           </div>
-          {!applyResult && (
+          {!applyResult && !applyProgress && (
             <button onClick={handleApply} disabled={isPending}
               className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold disabled:opacity-50 block">
-              {isPending ? 'Applico...' : '✓ Applica rose al sistema'}
+              ✓ Applica rose al sistema
             </button>
+          )}
+          {applyProgress && (
+            <div className="space-y-1">
+              <p className="text-xs text-blue-700 font-medium">
+                Assegnazione in corso… {applyProgress.done}/{applyProgress.total} giocatori
+              </p>
+              <div className="w-full bg-blue-100 rounded-full h-2">
+                <div
+                  className="h-2 rounded-full bg-blue-600 transition-all duration-300"
+                  style={{ width: `${Math.round((applyProgress.done / applyProgress.total) * 100)}%` }}
+                />
+              </div>
+              <p className="text-xs text-blue-500">
+                {Math.round((applyProgress.done / applyProgress.total) * 100)}%
+              </p>
+            </div>
           )}
           {applyResult && (
             <p className={`text-sm font-semibold ${applyResult.error ? 'text-red-600' : 'text-green-700'}`}>

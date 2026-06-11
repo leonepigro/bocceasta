@@ -66,7 +66,8 @@ export async function executeScheduledDraft(sessionId: string) {
   return { done: true, result, locked_at: lockedAt }
 }
 
-export async function applyLockedDraft(sessionId: string) {
+// Reset + apply in batch — chiamata iniziale: resetta tutti e restituisce il totale
+export async function startApplyDraft(sessionId: string) {
   await assertAdmin()
   const service = await createServiceClient()
 
@@ -80,30 +81,44 @@ export async function applyLockedDraft(sessionId: string) {
   if (!session.locked_at) return { error: 'Sorteggio non ancora eseguito' }
   if (session.applied_at) return { error: 'Già applicato' }
 
-  const draft = session.result as DraftResult
-  const assignments: ApplyAssignment[] = draft.assignments.flatMap(a =>
-    a.players.map(p => ({ playerId: p.id, teamId: a.team.id, fvm: p.fvm }))
-  )
-
+  // Reset
   await service.from('players')
     .update({ is_sold: false, sold_to_team_id: null, sold_price: null })
     .neq('id', 0)
 
+  const draft = session.result as DraftResult
+  const total = draft.assignments.reduce((s, a) => s + a.players.length, 0)
+  return { success: true, total }
+}
+
+// Applica un batch di N giocatori per sessionId
+export async function applyDraftBatch(
+  sessionId: string,
+  batch: ApplyAssignment[]
+) {
+  await assertAdmin()
+  const service = await createServiceClient()
   const errors: string[] = []
-  for (const { playerId, teamId, fvm } of assignments) {
+
+  for (const { playerId, teamId, fvm } of batch) {
     const { error } = await service.from('players')
       .update({ is_sold: true, sold_to_team_id: teamId, sold_price: fvm ?? 1 })
       .eq('id', playerId)
-    if (error) errors.push(`Player ${playerId}: ${error.message}`)
+    if (error) errors.push(`${playerId}`)
   }
+  return { done: batch.length, errors }
+}
 
+// Marca la sessione come applicata
+export async function finalizeDraftApply(sessionId: string) {
+  await assertAdmin()
+  const service = await createServiceClient()
   await service.from('draft_sessions')
     .update({ applied_at: new Date().toISOString() })
     .eq('id', sessionId)
-
   revalidatePath('/admin')
   revalidatePath('/dashboard')
-  return { success: true, assigned: assignments.length, errors }
+  return { success: true }
 }
 
 // Usato dall'admin per vedere sessioni schedulate/bloccate
