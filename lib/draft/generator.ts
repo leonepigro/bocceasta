@@ -92,7 +92,6 @@ export function generateDraft(
     assignments[i].gk_serie_a_teams = assigned
     const gks = porPlayers
       .filter(p => assigned.includes(p.serie_a_team ?? ''))
-      .slice(0, GK_PER_TEAM)
     for (const gk of gks) { assignments[i].players.push(gk); assignedIds.add(gk.id) }
   }
 
