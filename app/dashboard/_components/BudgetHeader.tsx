@@ -32,6 +32,12 @@ export function BudgetHeader({ team, rosterCount, rosterMin, rosterMax, isAdmin 
           </p>
         </div>
         <Link
+          href="/preferiti"
+          className="text-xs px-2 py-1 rounded border border-white/40 text-white/80 hover:bg-white/10 transition-colors"
+        >
+          ⭐ Wishlist
+        </Link>
+        <Link
           href="/planner"
           className="text-xs px-2 py-1 rounded border border-white/40 text-white/80 hover:bg-white/10 transition-colors"
         >

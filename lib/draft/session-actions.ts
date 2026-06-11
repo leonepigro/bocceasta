@@ -41,17 +41,22 @@ export async function executeScheduledDraft(sessionId: string) {
   if (!session.scheduled_at) return { error: 'Nessun timer impostato' }
   if (new Date(session.scheduled_at) > new Date()) return { notYet: true }
 
-  // Fetch teams e players
-  const [{ data: teams }, { data: players }] = await Promise.all([
+  // Fetch teams, players e preferenze wishlist
+  const [{ data: teams }, { data: players }, { data: preferences }] = await Promise.all([
     service.from('teams').select('*').order('team_name'),
     service.from('players').select('id, name, roles, fvm, serie_a_team'),
+    service.from('team_preferences').select('team_id, player_id'),
   ])
 
   if (!teams?.length) return { error: 'Nessuna squadra trovata' }
   if (!players?.length) return { error: 'Nessun giocatore trovato' }
 
   // Genera e blocca in un colpo solo (nessun preview)
-  const result = generateDraft(teams, players as Parameters<typeof generateDraft>[1])
+  const result = generateDraft(
+    teams,
+    players as Parameters<typeof generateDraft>[1],
+    preferences ?? []
+  )
   const lockedAt = new Date().toISOString()
 
   const { error: updateErr } = await service

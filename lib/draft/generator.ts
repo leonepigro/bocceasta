@@ -33,12 +33,17 @@ function shuffle<T>(arr: T[]): T[] {
   return a
 }
 
-// Distribuzione globale per Quotazione: tutti i giocatori (portieri inclusi)
-// ordinati per FVM desc, ogni giocatore va al team con totale FVM più basso
-// e che ha ancora slot per quel ruolo. Garantisce equità totale.
+// Wishlist: per ogni giocatore, set di team che lo hanno in preferenza.
+// Mappa indici team interni (dipende dall'ordine `assignments`).
+export type Wishlist = Map<number, Set<number>>
+
+// Distribuzione globale per Quotazione: tutti i giocatori ordinati per FVM desc,
+// ogni giocatore va al team con totale FVM più basso che ha ancora slot per quel ruolo.
+// Se ≥1 team eligibile ha il giocatore in wishlist → restringe la scelta a quelli.
 function globalBalancedDistribute(
   allPlayers: DraftPlayer[],
-  assignments: DraftTeamAssignment[]
+  assignments: DraftTeamAssignment[],
+  wishlist: Wishlist | null
 ): void {
   const n = assignments.length
 
@@ -51,7 +56,6 @@ function globalBalancedDistribute(
     Object.fromEntries(Object.entries(roleTarget).map(([r, t]) => [r, t]))
   )
 
-  // Inizializza con FVM già presenti (es. portieri assegnati prima)
   const totalFvm: number[] = assignments.map(a =>
     a.players.reduce((s, p) => s + (p.fvm ?? 0), 0)
   )
@@ -61,8 +65,15 @@ function globalBalancedDistribute(
   for (const player of sorted) {
     const role = player.primary_role
 
-    const eligible = [...Array(n).keys()].filter(i => (remaining[i][role] ?? 0) > 0)
+    let eligible = [...Array(n).keys()].filter(i => (remaining[i][role] ?? 0) > 0)
     if (eligible.length === 0) continue
+
+    // Wishlist: se ≥1 team eligibile ha questo giocatore in wishlist, limita a quelli
+    const fans = wishlist?.get(player.id)
+    if (fans && fans.size > 0) {
+      const wishedAndEligible = eligible.filter(i => fans.has(i))
+      if (wishedAndEligible.length > 0) eligible = wishedAndEligible
+    }
 
     eligible.sort((a, b) => {
       const diff = totalFvm[a] - totalFvm[b]
@@ -76,15 +87,36 @@ function globalBalancedDistribute(
   }
 }
 
+// rawPreferences: array di (team_id Bocceasta, player_id) preferenze utenti.
+// Vengono convertite in Wishlist indicizzata sull'ordine `assignments` (shufflato).
+function buildWishlist(
+  assignments: DraftTeamAssignment[],
+  rawPreferences: { team_id: string; player_id: number }[]
+): Wishlist {
+  const teamIdToIndex = new Map<string, number>()
+  assignments.forEach((a, i) => teamIdToIndex.set(a.team.id, i))
+  const w: Wishlist = new Map()
+  for (const { team_id, player_id } of rawPreferences) {
+    const idx = teamIdToIndex.get(team_id)
+    if (idx === undefined) continue
+    const set = w.get(player_id) ?? new Set<number>()
+    set.add(idx)
+    w.set(player_id, set)
+  }
+  return w
+}
+
 function generateSingleDraft(
   bocceastaTeams: Team[],
-  rawPlayers: { id: number; name: string; roles: string[]; fvm: number | null; serie_a_team: string | null }[]
+  rawPlayers: { id: number; name: string; roles: string[]; fvm: number | null; serie_a_team: string | null }[],
+  rawPreferences: { team_id: string; player_id: number }[] = []
 ): DraftResult {
   const n = bocceastaTeams.length
   const teams = shuffle([...bocceastaTeams])
   const assignments: DraftTeamAssignment[] = teams.map(t => ({
     team: t, players: [], gk_serie_a_teams: [],
   }))
+  const wishlist = buildWishlist(assignments, rawPreferences)
 
   const players: DraftPlayer[] = rawPlayers
     .filter(p => p.roles.length > 0)
@@ -138,7 +170,7 @@ function generateSingleDraft(
 
   // ─── OUTFIELD distribuiti per Quotazione (parte dal totale già caricato coi portieri) ───
   const allOutfield = players.filter(p => OUTFIELD_ROLES.includes(p.primary_role))
-  globalBalancedDistribute(allOutfield, assignments)
+  globalBalancedDistribute(allOutfield, assignments, wishlist)
 
   return { assignments }
 }
@@ -149,17 +181,18 @@ function totalRosterFvm(a: DraftTeamAssignment): number {
 }
 
 // Best-of-N: genera 100 sorteggi candidati, ritorna quello con minor range FVM totale.
-// Bilancia il totale (compresi i portieri assegnati casualmente).
+// Wishlist preferenze applicata in tie-breaking — equità totale comunque garantita.
 export function generateDraft(
   bocceastaTeams: Team[],
-  rawPlayers: Parameters<typeof generateSingleDraft>[1]
+  rawPlayers: Parameters<typeof generateSingleDraft>[1],
+  rawPreferences: { team_id: string; player_id: number }[] = []
 ): DraftResult {
   const N_CANDIDATES = 100
   let best: DraftResult | null = null
   let bestSpread = Infinity
 
   for (let i = 0; i < N_CANDIDATES; i++) {
-    const candidate = generateSingleDraft(bocceastaTeams, rawPlayers)
+    const candidate = generateSingleDraft(bocceastaTeams, rawPlayers, rawPreferences)
     const fvms = candidate.assignments.map(totalRosterFvm)
     const spread = Math.max(...fvms) - Math.min(...fvms)
     if (spread < bestSpread) {
