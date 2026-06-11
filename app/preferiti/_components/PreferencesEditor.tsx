@@ -2,6 +2,8 @@
 import { useState, useTransition, useMemo } from 'react'
 import { togglePreference } from '@/lib/preferences/actions'
 
+const MAX_WISHLIST = 30
+
 type Player = {
   id: number
   name: string
@@ -49,10 +51,16 @@ export function PreferencesEditor({
     return c
   }, [prefs, players])
 
+  const isFull = prefs.size >= MAX_WISHLIST
+
   function toggle(id: number) {
     const newSet = new Set(prefs)
-    if (newSet.has(id)) newSet.delete(id)
-    else newSet.add(id)
+    if (newSet.has(id)) {
+      newSet.delete(id)
+    } else {
+      if (isFull) return
+      newSet.add(id)
+    }
     setPrefs(newSet)
     startTransition(() => { togglePreference(id) })
   }
@@ -61,14 +69,17 @@ export function PreferencesEditor({
     <div className="space-y-4">
       {/* Intro */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-700 space-y-1">
-        <p><strong>Come funziona</strong>: clicca i giocatori che vorresti nella tua rosa.</p>
+        <p><strong>Come funziona</strong>: clicca i giocatori che vorresti nella tua rosa (max {MAX_WISHLIST}).</p>
         <p>Al sorteggio, a parità di Quotazione vincerai tu su chi non li ha in wishlist.</p>
         <p>Strategia: mescola top con giocatori medi che pensi pochi punteranno.</p>
       </div>
 
       {/* Counter per ruolo */}
-      <div className="border rounded-lg p-3">
-        <p className="text-xs text-gray-500 mb-2">Wishlist: <strong>{prefs.size} giocatori</strong></p>
+      <div className={`border rounded-lg p-3 ${isFull ? 'border-orange-300 bg-orange-50' : ''}`}>
+        <p className="text-xs text-gray-500 mb-2">
+          Wishlist: <strong className={isFull ? 'text-orange-600' : ''}>{prefs.size} / {MAX_WISHLIST} giocatori</strong>
+          {isFull && <span className="text-orange-600 ml-2">— limite raggiunto, rimuovi qualcuno per aggiungere altri</span>}
+        </p>
         <div className="flex flex-wrap gap-1.5">
           {ALL_ROLES.map(r => {
             const c = countByRole[r] ?? 0
@@ -108,9 +119,12 @@ export function PreferencesEditor({
       <div className="border rounded-lg divide-y max-h-[60vh] overflow-y-auto">
         {filtered.slice(0, 500).map(p => {
           const selected = prefs.has(p.id)
+          const disabled = !selected && isFull
           return (
-            <button key={p.id} onClick={() => toggle(p.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-blue-50 transition ${selected ? 'bg-blue-50' : ''}`}>
+            <button key={p.id} onClick={() => toggle(p.id)} disabled={disabled}
+              className={`w-full flex items-center gap-3 px-3 py-2 text-left transition
+                ${selected ? 'bg-blue-50' : ''}
+                ${disabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-blue-50'}`}>
               <span className="text-base w-5">{selected ? '★' : '☆'}</span>
               <span className="text-white text-xs font-bold px-1.5 py-0.5 rounded w-8 text-center flex-shrink-0"
                 style={{ background: ROLE_COLOR[p.roles[0]] ?? '#9ca3af' }}>

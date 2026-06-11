@@ -24,6 +24,8 @@ export async function getMyPreferences(): Promise<number[]> {
   return (data ?? []).map(r => r.player_id)
 }
 
+export const MAX_WISHLIST_SIZE = 30
+
 export async function togglePreference(playerId: number) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -44,6 +46,14 @@ export async function togglePreference(playerId: number) {
     revalidatePath('/preferiti')
     return { added: false }
   } else {
+    // Limite 30 wishlist
+    const { count } = await supabase
+      .from('team_preferences')
+      .select('*', { count: 'exact', head: true })
+      .eq('team_id', teamId)
+    if ((count ?? 0) >= MAX_WISHLIST_SIZE) {
+      return { error: `Limite wishlist raggiunto (${MAX_WISHLIST_SIZE} giocatori)` }
+    }
     await supabase.from('team_preferences')
       .insert({ team_id: teamId, player_id: playerId })
     revalidatePath('/preferiti')
