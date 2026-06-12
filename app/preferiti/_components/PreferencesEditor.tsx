@@ -257,24 +257,30 @@ export function PreferencesEditor({ players, initialPreferences, maxTotal, maxPe
         {filtered.slice(0, 500).map(p => {
           const selected = prefs.has(p.id)
           const disabled = !selected && isFull
-          const primary = p.roles[0]
+          // Ruolo "effettivo" previsto: primo ruolo con slot libero nella wishlist corrente.
+          // Cabal [B, Ds, E]: se B è saturo, viene evidenziato Ds. Riflette il fallback del sorteggio.
+          const effectiveRole = p.roles.find(r => {
+            const max = maxPerRole[r]
+            if (max == null) return true
+            return countPrefsInRole(r) < max
+          }) ?? p.roles[0]
           return (
             <button key={p.id} onClick={() => toggle(p.id)} disabled={disabled}
               className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition
                 ${selected ? 'bg-blue-50' : ''}
                 ${disabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-blue-50'}`}>
               <span className="text-base w-5 flex-shrink-0">{selected ? '★' : '☆'}</span>
-              {/* Ruoli: primario filled + bordo doppio, secondari outline */}
+              {/* Ruoli: effettivo (con slot) filled + ring, altri outline */}
               <span className="flex items-center gap-0.5 flex-shrink-0">
-                {p.roles.map((r, i) => {
-                  const isPrimary = i === 0
+                {p.roles.map(r => {
+                  const isEffective = r === effectiveRole
                   return (
                     <span key={r}
-                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isPrimary ? 'text-white ring-2 ring-offset-1 ring-gray-700' : 'border'}`}
-                      style={isPrimary
+                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isEffective ? 'text-white ring-2 ring-offset-1 ring-gray-700' : 'border'}`}
+                      style={isEffective
                         ? { background: ROLE_COLOR[r] ?? '#9ca3af' }
                         : { color: ROLE_COLOR[r] ?? '#9ca3af', borderColor: ROLE_COLOR[r] ?? '#d1d5db' }}
-                      title={isPrimary ? `${r} (primario)` : r}>
+                      title={isEffective ? `${r} (ruolo elettivo: slot libero)` : r}>
                       {r}
                     </span>
                   )
@@ -292,7 +298,7 @@ export function PreferencesEditor({ players, initialPreferences, maxTotal, maxPe
       </div>
 
       <p className="text-[11px] text-gray-400 text-center">
-        Il <strong className="text-gray-600">primo ruolo (cerchiato in scuro)</strong> è quello con cui il giocatore occupa lo slot nel sorteggio.
+        Il <strong className="text-gray-600">ruolo elettivo (cerchiato in scuro)</strong> è quello con slot libero nella wishlist corrente — è il ruolo con cui il giocatore occuperà lo slot.
       </p>
     </div>
   )
