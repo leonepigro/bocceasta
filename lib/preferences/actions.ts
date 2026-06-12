@@ -104,16 +104,21 @@ export async function togglePreference(playerId: number) {
     return { error: `Limite wishlist raggiunto (${cfg.maxTotal} giocatori)` }
   }
 
-  // Conta giocatori in wishlist con stesso ruolo primario
-  const targetRole = player?.roles?.[0]
-  if (targetRole && cfg.maxPerRole[targetRole] != null) {
-    const sameRole = (currentPrefs ?? []).filter(p => {
-      const roles = (p as unknown as { players: { roles: string[] } }).players?.roles
-      return roles?.[0] === targetRole
-    }).length
-    if (sameRole >= cfg.maxPerRole[targetRole]) {
-      return { error: `Limite per ruolo ${targetRole} raggiunto (${cfg.maxPerRole[targetRole]})` }
-    }
+  // Multi-ruolo Mantra: consentito se ALMENO UN ruolo del giocatore ha slot.
+  const playerRoles = player?.roles ?? []
+  const roleCounts: Record<string, number> = {}
+  for (const p of currentPrefs ?? []) {
+    const r = (p as unknown as { players: { roles: string[] } }).players?.roles?.[0]
+    if (r) roleCounts[r] = (roleCounts[r] ?? 0) + 1
+  }
+  const hasAnyRoleSlot = playerRoles.some(r => {
+    const max = cfg.maxPerRole[r]
+    if (max == null) return true
+    return (roleCounts[r] ?? 0) < max
+  })
+  if (!hasAnyRoleSlot) {
+    const limitsStr = playerRoles.map(r => `${r}=${cfg.maxPerRole[r] ?? '∞'}`).join(', ')
+    return { error: `Tutti i ruoli giocabili sono saturi (${limitsStr})` }
   }
 
   // Cap Quotazione totale wishlist

@@ -138,10 +138,18 @@ export function PreferencesEditor({ players, initialPreferences, maxTotal, maxPe
         setError(`Limite wishlist raggiunto (${MAX_WISHLIST})`)
         return
       }
-      const role = player.roles[0]
-      const roleLimit = maxPerRole[role]
-      if (roleLimit != null && countPrefsInRole(role) >= roleLimit) {
-        setError(`Limite per ruolo ${role} raggiunto (${roleLimit})`)
+      // Multi-ruolo (Mantra): consentito se ALMENO UN ruolo del giocatore ha slot.
+      // Cabal [B, Ds, E]: bloccato solo se B, Ds e E sono TUTTI saturi.
+      const hasAnyRoleSlot = player.roles.some(r => {
+        const max = maxPerRole[r]
+        if (max == null) return true
+        return countPrefsInRole(r) < max
+      })
+      if (!hasAnyRoleSlot) {
+        const limitsStr = player.roles
+          .map(r => `${r}=${maxPerRole[r] ?? '∞'}`)
+          .join(', ')
+        setError(`Tutti i ruoli giocabili sono saturi (${limitsStr})`)
         return
       }
       // Cap Quotazione: solo se admin ha impostato un cap esplicito (>0)
