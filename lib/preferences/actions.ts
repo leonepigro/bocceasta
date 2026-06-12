@@ -105,13 +105,13 @@ export async function togglePreference(playerId: number) {
   }
 
   // Multi-ruolo Mantra: consentito se ALMENO UN ruolo del giocatore ha slot.
-  const playerRoles = player?.roles ?? []
+  const playerRoles: string[] = player?.roles ?? []
   const roleCounts: Record<string, number> = {}
   for (const p of currentPrefs ?? []) {
     const r = (p as unknown as { players: { roles: string[] } }).players?.roles?.[0]
     if (r) roleCounts[r] = (roleCounts[r] ?? 0) + 1
   }
-  const hasAnyRoleSlot = playerRoles.some(r => {
+  const hasAnyRoleSlot = playerRoles.some((r: string) => {
     const max = cfg.maxPerRole[r]
     if (max == null) return true
     return (roleCounts[r] ?? 0) < max
