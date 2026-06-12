@@ -57,8 +57,12 @@ export function PreferencesEditor({ players, initialPreferences, maxTotal, maxPe
       if (p.roles[0] === 'Por' && !allowedGkIds.has(p.id)) return false
       if (showOnlySelected && !prefs.has(p.id)) return false
       if (roleFilter !== 'all' && !p.roles.includes(roleFilter)) return false
-      if (q && !p.name.toLowerCase().includes(q) &&
-          !(p.serie_a_team ?? '').toLowerCase().includes(q)) return false
+      if (q) {
+        const matchesName = p.name.toLowerCase().includes(q)
+        const matchesTeam = (p.serie_a_team ?? '').toLowerCase().includes(q)
+        const matchesRole = p.roles.some(r => r.toLowerCase() === q)
+        if (!matchesName && !matchesTeam && !matchesRole) return false
+      }
       return true
     })
   }, [players, filter, roleFilter, showOnlySelected, prefs, allowedGkIds])
@@ -213,10 +217,18 @@ export function PreferencesEditor({ players, initialPreferences, maxTotal, maxPe
 
       {/* Filtri */}
       <div className="space-y-2">
-        <input
-          type="text" placeholder="Cerca per nome o squadra Serie A..."
-          value={filter} onChange={e => setFilter(e.target.value)}
-          className="w-full border rounded-lg px-3 py-2 text-sm" />
+        {/* Search prominente */}
+        <div className="relative">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-base">🔍</span>
+          <input
+            type="text" placeholder="Cerca per nome, squadra Serie A o ruolo (es. Calhanoglu, Inter, M)..."
+            value={filter} onChange={e => setFilter(e.target.value)}
+            className="w-full border-2 rounded-lg pl-10 pr-3 py-2.5 text-sm focus:border-red-300 focus:outline-none" />
+          {filter && (
+            <button onClick={() => setFilter('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm">✕</button>
+          )}
+        </div>
         <div className="flex gap-2 items-center flex-wrap">
           <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)}
             className="border rounded px-2 py-1 text-xs">
@@ -237,15 +249,28 @@ export function PreferencesEditor({ players, initialPreferences, maxTotal, maxPe
         {filtered.slice(0, 500).map(p => {
           const selected = prefs.has(p.id)
           const disabled = !selected && isFull
+          const primary = p.roles[0]
           return (
             <button key={p.id} onClick={() => toggle(p.id)} disabled={disabled}
-              className={`w-full flex items-center gap-3 px-3 py-2 text-left transition
+              className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition
                 ${selected ? 'bg-blue-50' : ''}
                 ${disabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-blue-50'}`}>
-              <span className="text-base w-5">{selected ? '★' : '☆'}</span>
-              <span className="text-white text-xs font-bold px-1.5 py-0.5 rounded w-8 text-center flex-shrink-0"
-                style={{ background: ROLE_COLOR[p.roles[0]] ?? '#9ca3af' }}>
-                {p.roles[0]}
+              <span className="text-base w-5 flex-shrink-0">{selected ? '★' : '☆'}</span>
+              {/* Ruoli: primario filled + bordo doppio, secondari outline */}
+              <span className="flex items-center gap-0.5 flex-shrink-0">
+                {p.roles.map((r, i) => {
+                  const isPrimary = i === 0
+                  return (
+                    <span key={r}
+                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isPrimary ? 'text-white ring-2 ring-offset-1 ring-gray-700' : 'border'}`}
+                      style={isPrimary
+                        ? { background: ROLE_COLOR[r] ?? '#9ca3af' }
+                        : { color: ROLE_COLOR[r] ?? '#9ca3af', borderColor: ROLE_COLOR[r] ?? '#d1d5db' }}
+                      title={isPrimary ? `${r} (primario)` : r}>
+                      {r}
+                    </span>
+                  )
+                })}
               </span>
               <span className="flex-1 text-sm truncate">{p.name}</span>
               <span className="text-xs text-gray-400 w-20 truncate text-right">{p.serie_a_team ?? '—'}</span>
@@ -257,6 +282,10 @@ export function PreferencesEditor({ players, initialPreferences, maxTotal, maxPe
           <p className="text-xs text-center text-gray-400 py-3">Mostrati primi 500. Affina i filtri.</p>
         )}
       </div>
+
+      <p className="text-[11px] text-gray-400 text-center">
+        Il <strong className="text-gray-600">primo ruolo (cerchiato in scuro)</strong> è quello con cui il giocatore occupa lo slot nel sorteggio.
+      </p>
     </div>
   )
 }
