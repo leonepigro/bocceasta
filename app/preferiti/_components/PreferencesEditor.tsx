@@ -67,22 +67,18 @@ export function PreferencesEditor({ players, initialPreferences, maxTotal, maxPe
     })
   }, [players, filter, roleFilter, showOnlySelected, prefs, allowedGkIds])
 
-  // Greedy: i giocatori meno flessibili (meno ruoli) riempiono prima i loro slot,
-  // poi i multi-ruolo scalano al primo libero. Riflette la logica del sorteggio.
+  // Greedy FIFO: ogni giocatore prende il primo ruolo libero AL MOMENTO della selezione.
+  // L'ordine di inserimento (Set in JS preserva l'ordine) riflette la priorità utente.
+  // Se aggiungi Rensch dopo che Dd ha già 1/2, lui occupa Dd (porta a 2/2).
   function runGreedy(playerSet: Iterable<number>): {
     counts: Record<string, number>
     byPlayer: Map<number, string>
   } {
     const counts: Record<string, number> = {}
     const byPlayer = new Map<number, string>()
-    const prefPlayers = [...playerSet]
-      .map(id => players.find(p => p.id === id))
-      .filter((p): p is Player => p != null)
-      .sort((a, b) => {
-        if (a.roles.length !== b.roles.length) return a.roles.length - b.roles.length
-        return (b.fvm ?? 0) - (a.fvm ?? 0)
-      })
-    for (const p of prefPlayers) {
+    for (const id of playerSet) {
+      const p = players.find(x => x.id === id)
+      if (!p) continue
       let assigned: string | null = null
       for (const r of p.roles) {
         const max = maxPerRole[r]
