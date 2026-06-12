@@ -16,7 +16,7 @@ export async function registerUser(email: string, password: string) {
   const { error } = await service.auth.admin.createUser({
     email,
     password,
-    user_metadata: { role: 'user' },
+    user_metadata: { role: 'user', self_registered: true },
     email_confirm: true,
   })
   if (error) return { error: error.message }

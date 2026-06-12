@@ -1,7 +1,8 @@
 'use client'
 import { useState, useEffect, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { createTeam, updateTeamBudget, updateTeamInfo, getTeamEmail, updateTeamEmail, resetTeamPassword, deleteTeam, listUsersWithoutTeam, createTeamForExistingUser } from '@/lib/admin/actions'
+import { createTeam, updateTeamBudget, updateTeamInfo, getTeamEmail, updateTeamEmail, resetTeamPassword, deleteTeam, listUsersWithoutTeam, createTeamForExistingUser, deleteUser } from '@/lib/admin/actions'
+import type { OrphanUser } from '@/lib/admin/actions'
 import type { Team } from '@/lib/supabase/types'
 
 type Props = { teams: Team[] }
@@ -156,17 +157,17 @@ export function TeamsSection({ teams: initialTeams }: Props) {
   const [form, setForm] = useState({ teamName: '', ownerName: '', email: '', password: '', userId: '' })
   const [createError, setCreateError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
-  const [availableUsers, setAvailableUsers] = useState<{ id: string; email: string }[]>([])
+  const [availableUsers, setAvailableUsers] = useState<OrphanUser[]>([])
   const router = useRouter()
 
   useEffect(() => { setTeams(initialTeams) }, [initialTeams])
 
-  // Carica utenti senza squadra quando si apre il form
-  useEffect(() => {
-    if (showCreate) {
-      listUsersWithoutTeam().then(setAvailableUsers)
-    }
-  }, [showCreate])
+  // Carica utenti orfani sempre (anche se form chiuso, per la sezione sotto)
+  function refreshOrphans() {
+    listUsersWithoutTeam().then(setAvailableUsers)
+  }
+  useEffect(refreshOrphans, [])
+  useEffect(() => { if (showCreate) refreshOrphans() }, [showCreate])
 
   function handleCreate(e: React.FormEvent) {
     e.preventDefault()
@@ -227,7 +228,9 @@ export function TeamsSection({ teams: initialTeams }: Props) {
                 className="w-full border rounded px-3 py-1.5 text-sm" required>
                 <option value="">Seleziona utente registrato senza squadra…</option>
                 {availableUsers.map(u => (
-                  <option key={u.id} value={u.id}>{u.email}</option>
+                  <option key={u.id} value={u.id}>
+                    {u.email} ({u.source === 'self' ? 'self-reg' : u.source === 'admin' ? 'admin' : '?'})
+                  </option>
                 ))}
               </select>
               {availableUsers.length === 0 && (
@@ -264,8 +267,71 @@ export function TeamsSection({ teams: initialTeams }: Props) {
 
       <div className="space-y-2">
         {teams.map(t => (
-          <TeamRow key={t.id} team={t} onSaved={() => router.refresh()} />
+          <TeamRow key={t.id} team={t} onSaved={() => { router.refresh(); refreshOrphans() }} />
         ))}
+      </div>
+
+      {/* Utenti orfani */}
+      <div className="mt-8 border-t pt-4">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold">Utenti senza squadra ({availableUsers.length})</h2>
+          <button onClick={refreshOrphans}
+            className="text-xs text-blue-600 underline">Aggiorna</button>
+        </div>
+        {availableUsers.length === 0 ? (
+          <p className="text-sm text-gray-400 py-4 text-center">Nessun utente orfano</p>
+        ) : (
+          <div className="border rounded-lg overflow-hidden">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b bg-gray-50">
+                  <th className="text-left px-3 py-2 font-medium">Email</th>
+                  <th className="text-left px-2 py-2">Origine</th>
+                  <th className="text-left px-2 py-2">Registrato</th>
+                  <th className="text-left px-2 py-2">Ultimo login</th>
+                  <th className="text-right px-3 py-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {availableUsers.map(u => (
+                  <tr key={u.id} className="border-b hover:bg-gray-50">
+                    <td className="px-3 py-2 font-mono">{u.email}</td>
+                    <td className="px-2 py-2">
+                      {u.source === 'self' && <span className="text-green-700 bg-green-50 px-1.5 py-0.5 rounded">self</span>}
+                      {u.source === 'admin' && <span className="text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">admin</span>}
+                      {u.source === 'unknown' && <span className="text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">?</span>}
+                    </td>
+                    <td className="px-2 py-2 text-gray-500">
+                      {u.created_at ? new Date(u.created_at).toLocaleString('it-IT', {
+                        day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit'
+                      }) : '—'}
+                    </td>
+                    <td className="px-2 py-2 text-gray-500">
+                      {u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleString('it-IT', {
+                        day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit'
+                      }) : <span className="text-gray-300">mai</span>}
+                    </td>
+                    <td className="text-right px-3 py-2">
+                      <button
+                        onClick={() => {
+                          if (!confirm(`Cancellare definitivamente l'utente ${u.email}?`)) return
+                          startTransition(async () => {
+                            const r = await deleteUser(u.id)
+                            if ('error' in r && r.error) { alert(`Errore: ${r.error}`); return }
+                            refreshOrphans()
+                          })
+                        }}
+                        disabled={isPending}
+                        className="text-xs px-2 py-1 border border-red-200 rounded text-red-600 hover:bg-red-50 disabled:opacity-50">
+                        🗑
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   )

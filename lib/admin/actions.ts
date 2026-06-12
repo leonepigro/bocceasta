@@ -47,7 +47,7 @@ export async function createTeam(teamName: string, ownerName: string, email: str
     const { data: authData, error: authError } = await service.auth.admin.createUser({
       email,
       password,
-      user_metadata: { role: 'user' },
+      user_metadata: { role: 'user', self_registered: false },
       email_confirm: true,
     })
     if (authError) return { error: authError.message }
@@ -127,8 +127,16 @@ export async function deleteTeam(teamId: string) {
   return { success: true }
 }
 
+export type OrphanUser = {
+  id: string
+  email: string
+  created_at: string
+  source: 'self' | 'admin' | 'unknown'
+  last_sign_in_at: string | null
+}
+
 // Lista utenti registrati senza squadra associata
-export async function listUsersWithoutTeam(): Promise<{ id: string; email: string }[]> {
+export async function listUsersWithoutTeam(): Promise<OrphanUser[]> {
   const service = await assertAdmin()
   const [{ data: users }, { data: teams }] = await Promise.all([
     service.auth.admin.listUsers(),
@@ -138,8 +146,32 @@ export async function listUsersWithoutTeam(): Promise<{ id: string; email: strin
   return (users?.users ?? [])
     .filter(u => u.email && !linkedIds.has(u.id))
     .filter(u => u.user_metadata?.role !== 'admin')
-    .map(u => ({ id: u.id, email: u.email! }))
-    .sort((a, b) => a.email.localeCompare(b.email))
+    .map(u => {
+      const meta = u.user_metadata ?? {}
+      const source: OrphanUser['source'] =
+        meta.self_registered === true ? 'self' :
+        meta.self_registered === false ? 'admin' : 'unknown'
+      return {
+        id: u.id,
+        email: u.email!,
+        created_at: u.created_at ?? '',
+        source,
+        last_sign_in_at: u.last_sign_in_at ?? null,
+      }
+    })
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+}
+
+// Cancella un utente registrato (auth.users) — usabile solo per utenti senza team
+export async function deleteUser(userId: string) {
+  const service = await assertAdmin()
+  // Safety: blocca cancellazione se ha un team
+  const { data: team } = await service.from('teams').select('id').eq('user_id', userId).maybeSingle()
+  if (team) return { error: 'Utente associato a un team. Cancella prima il team.' }
+  const { error } = await service.auth.admin.deleteUser(userId)
+  if (error) return { error: error.message }
+  revalidatePath('/admin')
+  return { success: true }
 }
 
 // Associa team a un utente già registrato (no password necessaria)
