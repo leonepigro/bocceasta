@@ -138,11 +138,15 @@ export type OrphanUser = {
 // Lista utenti registrati senza squadra associata
 export async function listUsersWithoutTeam(): Promise<OrphanUser[]> {
   const service = await assertAdmin()
-  const [{ data: users }, { data: teams }] = await Promise.all([
+  const [{ data: users }, { data: teams }, { data: members }] = await Promise.all([
     service.auth.admin.listUsers(),
     service.from('teams').select('user_id'),
+    service.from('team_members').select('user_id'),
   ])
-  const linkedIds = new Set((teams ?? []).map(t => t.user_id).filter(Boolean) as string[])
+  const linkedIds = new Set([
+    ...(teams ?? []).map(t => t.user_id).filter(Boolean) as string[],
+    ...(members ?? []).map(m => m.user_id) as string[],
+  ])
   return (users?.users ?? [])
     .filter(u => u.email && !linkedIds.has(u.id))
     .filter(u => u.user_metadata?.role !== 'admin')
@@ -177,11 +181,62 @@ export async function deleteUser(userId: string) {
 // Associa team a un utente già registrato (no password necessaria)
 export async function createTeamForExistingUser(teamName: string, ownerName: string, userId: string) {
   const service = await assertAdmin()
-  const { error } = await service.from('teams').insert({
+  const { data, error } = await service.from('teams').insert({
     user_id: userId,
     team_name: teamName,
     owner_name: ownerName,
-  })
+  }).select('id').single()
+  if (error) return { error: error.message }
+  // Aggiungi anche alla junction
+  await service.from('team_members').insert({ team_id: data.id, user_id: userId })
+  revalidatePath('/admin')
+  return { success: true }
+}
+
+// Membri attualmente associati a un team (con email)
+export type TeamMember = { user_id: string; email: string; is_primary: boolean; added_at: string }
+
+export async function listTeamMembers(teamId: string): Promise<TeamMember[]> {
+  const service = await assertAdmin()
+  const [{ data: team }, { data: members }, { data: users }] = await Promise.all([
+    service.from('teams').select('user_id').eq('id', teamId).single(),
+    service.from('team_members').select('user_id, added_at').eq('team_id', teamId),
+    service.auth.admin.listUsers(),
+  ])
+  const emailMap = new Map((users?.users ?? []).map(u => [u.id, u.email ?? '']))
+  const primaryId = team?.user_id
+  return (members ?? []).map(m => ({
+    user_id: m.user_id,
+    email: emailMap.get(m.user_id) ?? '?',
+    is_primary: m.user_id === primaryId,
+    added_at: m.added_at,
+  })).sort((a, b) => (b.is_primary ? 1 : -1) - (a.is_primary ? 1 : -1))
+}
+
+export async function addTeamMember(teamId: string, userId: string) {
+  const service = await assertAdmin()
+  // Verifica utente esista e non sia già su un altro team
+  const { data: existing } = await service.from('team_members')
+    .select('team_id').eq('user_id', userId).maybeSingle()
+  if (existing && existing.team_id !== teamId) {
+    return { error: 'Utente già associato a un altro team' }
+  }
+  const { error } = await service.from('team_members')
+    .insert({ team_id: teamId, user_id: userId })
+  if (error) return { error: error.message }
+  revalidatePath('/admin')
+  return { success: true }
+}
+
+export async function removeTeamMember(teamId: string, userId: string) {
+  const service = await assertAdmin()
+  // Non rimuovere il primario senza promuovere qualcun altro
+  const { data: team } = await service.from('teams').select('user_id').eq('id', teamId).single()
+  if (team?.user_id === userId) {
+    return { error: 'Non puoi rimuovere il proprietario primario. Promuovi un altro membro o cancella il team.' }
+  }
+  const { error } = await service.from('team_members')
+    .delete().eq('team_id', teamId).eq('user_id', userId)
   if (error) return { error: error.message }
   revalidatePath('/admin')
   return { success: true }

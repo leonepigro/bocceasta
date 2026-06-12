@@ -47,9 +47,14 @@ export async function getMyTeamId(): Promise<string | null> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
-  const { data } = await supabase
+  // Check team_members (junction) — supporta più utenti per team
+  const { data: member } = await supabase
+    .from('team_members').select('team_id').eq('user_id', user.id).maybeSingle()
+  if (member?.team_id) return member.team_id
+  // Fallback: teams.user_id (retrocompat se migrazione non eseguita)
+  const { data: team } = await supabase
     .from('teams').select('id').eq('user_id', user.id).maybeSingle()
-  return data?.id ?? null
+  return team?.id ?? null
 }
 
 export async function getMyPreferences(): Promise<number[]> {

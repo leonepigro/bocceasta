@@ -10,7 +10,16 @@ export default async function DashboardPage() {
   if (!user) redirect('/login')
   const isAdmin = user.user_metadata?.role === 'admin'
 
-  const { data: myTeam } = await supabase.from('teams').select('*').eq('user_id', user.id).single()
+  // Trova team via junction team_members (multi-user) con fallback su teams.user_id
+  let myTeam: { id: string; team_name: string; owner_name: string | null; budget_remaining: number; user_id: string | null } | null = null
+  const { data: member } = await supabase.from('team_members').select('team_id').eq('user_id', user.id).maybeSingle()
+  if (member?.team_id) {
+    const { data } = await supabase.from('teams').select('*').eq('id', member.team_id).single()
+    myTeam = data
+  } else {
+    const { data } = await supabase.from('teams').select('*').eq('user_id', user.id).maybeSingle()
+    myTeam = data
+  }
   if (!myTeam) {
     if (isAdmin) redirect('/admin')
     return (

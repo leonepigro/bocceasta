@@ -1,13 +1,15 @@
 'use client'
 import { useState, useEffect, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { createTeam, updateTeamBudget, updateTeamInfo, getTeamEmail, updateTeamEmail, resetTeamPassword, deleteTeam, listUsersWithoutTeam, createTeamForExistingUser, deleteUser } from '@/lib/admin/actions'
-import type { OrphanUser } from '@/lib/admin/actions'
+import { createTeam, updateTeamBudget, updateTeamInfo, getTeamEmail, updateTeamEmail, resetTeamPassword, deleteTeam, listUsersWithoutTeam, createTeamForExistingUser, deleteUser, listTeamMembers, addTeamMember, removeTeamMember } from '@/lib/admin/actions'
+import type { OrphanUser, TeamMember } from '@/lib/admin/actions'
 import type { Team } from '@/lib/supabase/types'
 
 type Props = { teams: Team[] }
 
-function TeamRow({ team, onSaved }: { team: Team; onSaved: () => void }) {
+function TeamRow({ team, onSaved, orphans, onOrphansChange }: {
+  team: Team; onSaved: () => void; orphans: OrphanUser[]; onOrphansChange: () => void
+}) {
   const [editing, setEditing] = useState(false)
   const [teamName, setTeamName] = useState(team.team_name)
   const [ownerName, setOwnerName] = useState(team.owner_name)
@@ -18,18 +20,27 @@ function TeamRow({ team, onSaved }: { team: Team; onSaved: () => void }) {
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [pwReset, setPwReset] = useState(false)
+  const [members, setMembers] = useState<TeamMember[]>([])
+  const [addMemberId, setAddMemberId] = useState('')
 
-  // Carica email quando entra in editing
+  function refreshMembers() {
+    listTeamMembers(team.id).then(setMembers)
+  }
+
+  // Carica email + membri quando entra in editing
   useEffect(() => {
-    if (editing && !originalEmail) {
-      getTeamEmail(team.id).then(r => {
-        if (r.email) {
-          setEmail(r.email)
-          setOriginalEmail(r.email)
-        }
-      })
+    if (editing) {
+      if (!originalEmail) {
+        getTeamEmail(team.id).then(r => {
+          if (r.email) {
+            setEmail(r.email)
+            setOriginalEmail(r.email)
+          }
+        })
+      }
+      refreshMembers()
     }
-  }, [editing, originalEmail, team.id])
+  }, [editing, originalEmail, team.id])  // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleSave() {
     setError(null)
@@ -116,9 +127,64 @@ function TeamRow({ team, onSaved }: { team: Team; onSaved: () => void }) {
         </div>
       </div>
 
+      {/* Membri (multi-utente per team) */}
+      <div className="border-t pt-2 space-y-2">
+        <label className="text-[11px] font-semibold text-gray-500 uppercase">Membri ({members.length})</label>
+        <div className="space-y-1">
+          {members.map(m => (
+            <div key={m.user_id} className="flex items-center gap-2 text-xs bg-white rounded px-2 py-1">
+              <span className="font-mono flex-1 truncate">{m.email}</span>
+              {m.is_primary && <span className="text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded text-[10px]">primary</span>}
+              <span className="text-gray-400 text-[10px]">{new Date(m.added_at).toLocaleDateString('it-IT')}</span>
+              {!m.is_primary && (
+                <button type="button"
+                  onClick={() => {
+                    if (!confirm(`Rimuovere ${m.email} dal team?`)) return
+                    startTransition(async () => {
+                      const r = await removeTeamMember(team.id, m.user_id)
+                      if ('error' in r && r.error) { setError(r.error); return }
+                      refreshMembers()
+                      onOrphansChange()
+                    })
+                  }}
+                  className="text-red-600 hover:bg-red-50 px-1 rounded">
+                  ✕
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+        {/* Aggiungi membro */}
+        {orphans.length > 0 && (
+          <div className="flex gap-1">
+            <select value={addMemberId} onChange={e => setAddMemberId(e.target.value)}
+              className="flex-1 border rounded px-2 py-1 text-xs">
+              <option value="">+ Aggiungi membro orfano…</option>
+              {orphans.map(u => (
+                <option key={u.id} value={u.id}>{u.email}</option>
+              ))}
+            </select>
+            <button type="button" disabled={!addMemberId || isPending}
+              onClick={() => {
+                if (!addMemberId) return
+                startTransition(async () => {
+                  const r = await addTeamMember(team.id, addMemberId)
+                  if ('error' in r && r.error) { setError(r.error); return }
+                  setAddMemberId('')
+                  refreshMembers()
+                  onOrphansChange()
+                })
+              }}
+              className="text-xs px-2 py-1 bg-blue-600 text-white rounded disabled:opacity-40">
+              +
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* Email + password */}
       <div className="border-t pt-2 space-y-2">
-        <label className="text-[11px] font-semibold text-gray-500 uppercase">Account</label>
+        <label className="text-[11px] font-semibold text-gray-500 uppercase">Account primario</label>
         <input type="email" value={email} onChange={e => setEmail(e.target.value)}
           placeholder="Email accesso"
           className="w-full border rounded px-2 py-1.5 text-sm" />
@@ -267,7 +333,9 @@ export function TeamsSection({ teams: initialTeams }: Props) {
 
       <div className="space-y-2">
         {teams.map(t => (
-          <TeamRow key={t.id} team={t} onSaved={() => { router.refresh(); refreshOrphans() }} />
+          <TeamRow key={t.id} team={t} orphans={availableUsers}
+            onSaved={() => { router.refresh(); refreshOrphans() }}
+            onOrphansChange={refreshOrphans} />
         ))}
       </div>
 
