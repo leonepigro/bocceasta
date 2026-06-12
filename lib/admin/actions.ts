@@ -115,6 +115,46 @@ export async function resetTeamPassword(teamId: string, newPassword: string) {
   return { success: true }
 }
 
+export async function deleteTeam(teamId: string) {
+  const service = await assertAdmin()
+  // I players assegnati al team tornano svincolati
+  await service.from('players')
+    .update({ is_sold: false, sold_to_team_id: null, sold_price: null })
+    .eq('sold_to_team_id', teamId)
+  const { error } = await service.from('teams').delete().eq('id', teamId)
+  if (error) return { error: error.message }
+  revalidatePath('/admin')
+  return { success: true }
+}
+
+// Lista utenti registrati senza squadra associata
+export async function listUsersWithoutTeam(): Promise<{ id: string; email: string }[]> {
+  const service = await assertAdmin()
+  const [{ data: users }, { data: teams }] = await Promise.all([
+    service.auth.admin.listUsers(),
+    service.from('teams').select('user_id'),
+  ])
+  const linkedIds = new Set((teams ?? []).map(t => t.user_id).filter(Boolean) as string[])
+  return (users?.users ?? [])
+    .filter(u => u.email && !linkedIds.has(u.id))
+    .filter(u => u.user_metadata?.role !== 'admin')
+    .map(u => ({ id: u.id, email: u.email! }))
+    .sort((a, b) => a.email.localeCompare(b.email))
+}
+
+// Associa team a un utente già registrato (no password necessaria)
+export async function createTeamForExistingUser(teamName: string, ownerName: string, userId: string) {
+  const service = await assertAdmin()
+  const { error } = await service.from('teams').insert({
+    user_id: userId,
+    team_name: teamName,
+    owner_name: ownerName,
+  })
+  if (error) return { error: error.message }
+  revalidatePath('/admin')
+  return { success: true }
+}
+
 // Self-service: utente cambia la propria password
 export async function changeMyPassword(newPassword: string) {
   if (!newPassword || newPassword.length < 6) return { error: 'Password min 6 caratteri' }

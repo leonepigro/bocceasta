@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { createTeam, updateTeamBudget, updateTeamInfo, getTeamEmail, updateTeamEmail, resetTeamPassword } from '@/lib/admin/actions'
+import { createTeam, updateTeamBudget, updateTeamInfo, getTeamEmail, updateTeamEmail, resetTeamPassword, deleteTeam, listUsersWithoutTeam, createTeamForExistingUser } from '@/lib/admin/actions'
 import type { Team } from '@/lib/supabase/types'
 
 type Props = { teams: Team[] }
@@ -72,13 +72,26 @@ function TeamRow({ team, onSaved }: { team: Team; onSaved: () => void }) {
           <p className="font-medium">{team.team_name}</p>
           <p className="text-xs text-gray-500">{team.owner_name}</p>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-semibold" style={{ color: 'var(--boccea-red)' }}>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold mr-1" style={{ color: 'var(--boccea-red)' }}>
             {team.budget_remaining} cr
           </span>
           <button onClick={() => setEditing(true)}
             className="text-xs px-2 py-1 border rounded text-gray-500 hover:bg-gray-50">
             Modifica
+          </button>
+          <button
+            onClick={() => {
+              if (!confirm(`Cancellare squadra "${team.team_name}"?\nI giocatori assegnati torneranno svincolati. L'utente resta registrato.`)) return
+              startTransition(async () => {
+                const r = await deleteTeam(team.id)
+                if ('error' in r && r.error) { setError(r.error); return }
+                onSaved()
+              })
+            }}
+            disabled={isPending}
+            className="text-xs px-2 py-1 border border-red-200 rounded text-red-600 hover:bg-red-50 disabled:opacity-50">
+            🗑
           </button>
         </div>
       </div>
@@ -139,22 +152,32 @@ function TeamRow({ team, onSaved }: { team: Team; onSaved: () => void }) {
 export function TeamsSection({ teams: initialTeams }: Props) {
   const [teams, setTeams] = useState(initialTeams)
   const [showCreate, setShowCreate] = useState(false)
-  const [form, setForm] = useState({ teamName: '', ownerName: '', email: '', password: '' })
+  const [mode, setMode] = useState<'existing' | 'new'>('existing')
+  const [form, setForm] = useState({ teamName: '', ownerName: '', email: '', password: '', userId: '' })
   const [createError, setCreateError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [availableUsers, setAvailableUsers] = useState<{ id: string; email: string }[]>([])
   const router = useRouter()
 
-  // Sync quando il server ricarica le props
   useEffect(() => { setTeams(initialTeams) }, [initialTeams])
+
+  // Carica utenti senza squadra quando si apre il form
+  useEffect(() => {
+    if (showCreate) {
+      listUsersWithoutTeam().then(setAvailableUsers)
+    }
+  }, [showCreate])
 
   function handleCreate(e: React.FormEvent) {
     e.preventDefault()
     setCreateError(null)
     startTransition(async () => {
-      const r = await createTeam(form.teamName, form.ownerName, form.email, form.password)
+      const r = mode === 'existing' && form.userId
+        ? await createTeamForExistingUser(form.teamName, form.ownerName, form.userId)
+        : await createTeam(form.teamName, form.ownerName, form.email, form.password)
       if ('error' in r) { setCreateError(r.error ?? null); return }
       setShowCreate(false)
-      setForm({ teamName: '', ownerName: '', email: '', password: '' })
+      setForm({ teamName: '', ownerName: '', email: '', password: '', userId: '' })
       router.refresh()
     })
   }
@@ -173,19 +196,57 @@ export function TeamsSection({ teams: initialTeams }: Props) {
       </div>
 
       {showCreate && (
-        <form onSubmit={handleCreate} className="bg-gray-50 rounded-lg p-4 mb-4 space-y-2">
+        <form onSubmit={handleCreate} className="bg-gray-50 rounded-lg p-4 mb-4 space-y-3">
+          {/* Tab modalità */}
+          <div className="flex gap-1 border-b">
+            <button type="button" onClick={() => setMode('existing')}
+              className={`px-3 py-2 text-xs font-semibold border-b-2 ${
+                mode === 'existing' ? 'border-red-500 text-red-700' : 'border-transparent text-gray-500'
+              }`}>
+              Lega utente registrato ({availableUsers.length})
+            </button>
+            <button type="button" onClick={() => setMode('new')}
+              className={`px-3 py-2 text-xs font-semibold border-b-2 ${
+                mode === 'new' ? 'border-red-500 text-red-700' : 'border-transparent text-gray-500'
+              }`}>
+              Crea nuovo account
+            </button>
+          </div>
+
           <input placeholder="Nome squadra" value={form.teamName}
             onChange={e => setForm(p => ({ ...p, teamName: e.target.value }))}
             className="w-full border rounded px-3 py-1.5 text-sm" required />
           <input placeholder="Nome partecipante" value={form.ownerName}
             onChange={e => setForm(p => ({ ...p, ownerName: e.target.value }))}
             className="w-full border rounded px-3 py-1.5 text-sm" required />
-          <input type="email" placeholder="Email accesso" value={form.email}
-            onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
-            className="w-full border rounded px-3 py-1.5 text-sm" required />
-          <input type="password" placeholder="Password (min 6 caratteri)" value={form.password}
-            onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
-            className="w-full border rounded px-3 py-1.5 text-sm" required minLength={6} />
+
+          {mode === 'existing' ? (
+            <>
+              <select value={form.userId}
+                onChange={e => setForm(p => ({ ...p, userId: e.target.value }))}
+                className="w-full border rounded px-3 py-1.5 text-sm" required>
+                <option value="">Seleziona utente registrato senza squadra…</option>
+                {availableUsers.map(u => (
+                  <option key={u.id} value={u.id}>{u.email}</option>
+                ))}
+              </select>
+              {availableUsers.length === 0 && (
+                <p className="text-xs text-gray-500">
+                  Nessun utente disponibile. Indica loro di registrarsi su <code>/register</code> o usa &quot;Crea nuovo account&quot;.
+                </p>
+              )}
+            </>
+          ) : (
+            <>
+              <input type="email" placeholder="Email accesso" value={form.email}
+                onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
+                className="w-full border rounded px-3 py-1.5 text-sm" required />
+              <input type="password" placeholder="Password (min 6 caratteri)" value={form.password}
+                onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
+                className="w-full border rounded px-3 py-1.5 text-sm" required minLength={6} />
+            </>
+          )}
+
           {createError && <p className="text-red-500 text-xs">{createError}</p>}
           <div className="flex gap-2">
             <button type="submit" disabled={isPending}
