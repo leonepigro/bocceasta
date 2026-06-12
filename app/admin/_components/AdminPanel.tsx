@@ -67,6 +67,7 @@ export default function AdminPanel({ config, teams, auctions, players, activeDra
               enabled: config.wishlist_enabled,
               maxTotal: config.wishlist_max_total,
               maxPerRole: config.wishlist_max_per_role,
+              maxFvm: config.wishlist_max_fvm,
             }} />
           )}
         </main>

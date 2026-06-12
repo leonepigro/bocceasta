@@ -6,6 +6,7 @@ type WishlistCfg = {
   enabled: boolean
   maxTotal: number
   maxPerRole: Record<string, number>
+  maxFvm: number
 }
 
 const ALL_ROLES = ['Por', 'Dc', 'B', 'Dd', 'Ds', 'E', 'M', 'C', 'T', 'W', 'A', 'Pc']
@@ -69,6 +70,22 @@ export function WishlistConfigSection({ initial }: { initial: WishlistCfg }) {
           <input type="number" min={1} max={100} value={cfg.maxTotal}
             onChange={e => update('maxTotal', Number(e.target.value))}
             className="border rounded px-2 py-1 w-24 text-sm" />
+        </div>
+
+        {/* Max FVM (Quotazione) */}
+        <div className="border rounded-lg p-3 space-y-2 mt-3">
+          <label className="text-xs font-semibold text-gray-600">
+            Cap Quotazione totale wishlist
+          </label>
+          <div className="flex items-center gap-2">
+            <input type="number" min={0} max={5000} value={cfg.maxFvm}
+              onChange={e => update('maxFvm', Number(e.target.value))}
+              className="border rounded px-2 py-1 w-28 text-sm" />
+            <span className="text-xs text-gray-500">0 = nessun cap esplicito (usa solo media auto durante sorteggio)</span>
+          </div>
+          <p className="text-xs text-gray-400">
+            <strong>Suggerimento</strong>: imposta a un valore <em>inferiore</em> alla media per team (~1195) per garantire 23 slot outfield minimi anche stackando top.
+          </p>
         </div>
 
         {/* Max per ruolo */}

@@ -58,6 +58,7 @@ export type Config = {
   wishlist_enabled: boolean
   wishlist_max_total: number
   wishlist_max_per_role: Record<string, number>
+  wishlist_max_fvm: number
 }
 
 export type RosterRequirement = {

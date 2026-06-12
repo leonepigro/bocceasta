@@ -6,18 +6,20 @@ type WishlistConfig = {
   enabled: boolean
   maxTotal: number
   maxPerRole: Record<string, number>
+  maxFvm: number  // 0 = no cap esplicito, usa media auto
 }
 
 async function getWishlistConfig(): Promise<WishlistConfig> {
   const supabase = await createClient()
   const { data } = await supabase
     .from('config')
-    .select('wishlist_enabled, wishlist_max_total, wishlist_max_per_role')
+    .select('wishlist_enabled, wishlist_max_total, wishlist_max_per_role, wishlist_max_fvm')
     .eq('id', 1).maybeSingle()
   return {
     enabled: data?.wishlist_enabled ?? true,
     maxTotal: data?.wishlist_max_total ?? 30,
     maxPerRole: data?.wishlist_max_per_role ?? {},
+    maxFvm: data?.wishlist_max_fvm ?? 0,
   }
 }
 
@@ -34,6 +36,7 @@ export async function updateWishlistConfig(cfg: WishlistConfig) {
     wishlist_enabled: cfg.enabled,
     wishlist_max_total: cfg.maxTotal,
     wishlist_max_per_role: cfg.maxPerRole,
+    wishlist_max_fvm: cfg.maxFvm,
   }).eq('id', 1)
   revalidatePath('/admin')
   revalidatePath('/preferiti')
@@ -91,9 +94,9 @@ export async function togglePreference(playerId: number) {
     supabase.from('team_preferences')
       .select('*', { count: 'exact', head: true }).eq('team_id', teamId),
     supabase.from('players')
-      .select('id, roles').eq('id', playerId).single(),
+      .select('id, roles, fvm').eq('id', playerId).single(),
     supabase.from('team_preferences')
-      .select('player_id, players!inner(roles)')
+      .select('player_id, players!inner(roles, fvm)')
       .eq('team_id', teamId),
   ])
 
@@ -110,6 +113,18 @@ export async function togglePreference(playerId: number) {
     }).length
     if (sameRole >= cfg.maxPerRole[targetRole]) {
       return { error: `Limite per ruolo ${targetRole} raggiunto (${cfg.maxPerRole[targetRole]})` }
+    }
+  }
+
+  // Cap Quotazione totale wishlist
+  if (cfg.maxFvm > 0) {
+    const currentSum = (currentPrefs ?? []).reduce((s, p) => {
+      const f = (p as unknown as { players: { fvm: number | null } }).players?.fvm ?? 0
+      return s + f
+    }, 0)
+    const newSum = currentSum + (player?.fvm ?? 0)
+    if (newSum > cfg.maxFvm) {
+      return { error: `Cap Quotazione superato (${newSum} / ${cfg.maxFvm} max)` }
     }
   }
 

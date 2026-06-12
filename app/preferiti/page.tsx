@@ -56,6 +56,7 @@ export default async function PreferitiPage() {
           initialPreferences={preferences}
           maxTotal={cfg.maxTotal}
           maxPerRole={cfg.maxPerRole}
+          maxFvm={cfg.maxFvm}
         />
       </main>
     </div>

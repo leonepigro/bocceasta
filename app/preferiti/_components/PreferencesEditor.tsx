@@ -25,9 +25,10 @@ type Props = {
   initialPreferences: number[]
   maxTotal: number
   maxPerRole: Record<string, number>
+  maxFvm: number  // 0 = no cap esplicito
 }
 
-export function PreferencesEditor({ players, initialPreferences, maxTotal, maxPerRole }: Props) {
+export function PreferencesEditor({ players, initialPreferences, maxTotal, maxPerRole, maxFvm }: Props) {
   const MAX_WISHLIST = maxTotal
   const [prefs, setPrefs] = useState(new Set(initialPreferences))
   const [filter, setFilter] = useState('')
@@ -109,7 +110,8 @@ export function PreferencesEditor({ players, initialPreferences, maxTotal, maxPe
   }, [players])
 
   const isFull = prefs.size >= MAX_WISHLIST
-  const overAvg = wishlistFvm > avgPerTeam
+  const effectiveCap = maxFvm > 0 ? maxFvm : avgPerTeam
+  const overAvg = wishlistFvm > effectiveCap
 
   function countPrefsInRole(role: string): number {
     let c = 0
@@ -138,6 +140,11 @@ export function PreferencesEditor({ players, initialPreferences, maxTotal, maxPe
         setError(`Limite per ruolo ${role} raggiunto (${roleLimit})`)
         return
       }
+      // Cap Quotazione: solo se admin ha impostato un cap esplicito (>0)
+      if (maxFvm > 0 && wishlistFvm + (player.fvm ?? 0) > maxFvm) {
+        setError(`Cap Quotazione superato (${wishlistFvm + (player.fvm ?? 0)} / ${maxFvm} max)`)
+        return
+      }
       newSet.add(id)
     }
     setPrefs(newSet)
@@ -160,13 +167,15 @@ export function PreferencesEditor({ players, initialPreferences, maxTotal, maxPe
           {isFull && <span className="text-orange-600 ml-2">— limite raggiunto</span>}
         </p>
 
-        {/* Quotazione totale vs media */}
+        {/* Quotazione totale vs media/cap */}
         <div className="flex items-center gap-2 text-xs">
           <span className="text-gray-500">Quotazione wishlist:</span>
           <strong className={overAvg ? 'text-red-600' : 'text-gray-700'}>
             {wishlistFvm}
           </strong>
-          <span className="text-gray-400">/ {avgPerTeam} media</span>
+          <span className="text-gray-400">
+            / {effectiveCap} {maxFvm > 0 ? 'cap' : 'media'}
+          </span>
           <span className="relative group cursor-help">
             <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-600 text-[10px] font-bold">?</span>
             <span className="absolute left-0 top-5 z-10 hidden group-hover:block bg-gray-800 text-white text-[11px] rounded-lg p-2.5 w-72 shadow-lg leading-relaxed">
