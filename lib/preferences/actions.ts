@@ -140,3 +140,41 @@ export async function getAllPreferences(): Promise<{ team_id: string; player_id:
   const { data } = await supabase.from('team_preferences').select('team_id, player_id')
   return data ?? []
 }
+
+// Solo statistiche aggregate per admin. Nessun player_id, nessun nome giocatore.
+// Garantisce che admin non possa sbirciare i preferiti degli altri.
+export async function getWishlistStatsForAdmin(): Promise<{
+  team_id: string
+  team_name: string
+  owner_name: string | null
+  count: number
+  fvm_total: number
+}[]> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user || user.user_metadata?.role !== 'admin') return []
+
+  const service = await createServiceClient()
+  const [{ data: teams }, { data: prefs }] = await Promise.all([
+    service.from('teams').select('id, team_name, owner_name'),
+    service.from('team_preferences').select('team_id, players!inner(fvm)'),
+  ])
+
+  const aggByTeam = new Map<string, { count: number; fvm_total: number }>()
+  for (const row of prefs ?? []) {
+    const tid = (row as unknown as { team_id: string }).team_id
+    const fvm = (row as unknown as { players: { fvm: number | null } }).players?.fvm ?? 0
+    const cur = aggByTeam.get(tid) ?? { count: 0, fvm_total: 0 }
+    cur.count++
+    cur.fvm_total += fvm
+    aggByTeam.set(tid, cur)
+  }
+
+  return (teams ?? []).map(t => ({
+    team_id: t.id,
+    team_name: t.team_name,
+    owner_name: t.owner_name,
+    count: aggByTeam.get(t.id)?.count ?? 0,
+    fvm_total: aggByTeam.get(t.id)?.fvm_total ?? 0,
+  })).sort((a, b) => a.team_name.localeCompare(b.team_name))
+}

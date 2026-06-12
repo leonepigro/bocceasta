@@ -1,6 +1,14 @@
 'use client'
-import { useState, useTransition } from 'react'
-import { updateWishlistConfig } from '@/lib/preferences/actions'
+import { useState, useTransition, useEffect } from 'react'
+import { updateWishlistConfig, getWishlistStatsForAdmin } from '@/lib/preferences/actions'
+
+type WishlistStat = {
+  team_id: string
+  team_name: string
+  owner_name: string | null
+  count: number
+  fvm_total: number
+}
 
 type WishlistCfg = {
   enabled: boolean
@@ -22,6 +30,18 @@ export function WishlistConfigSection({ initial }: { initial: WishlistCfg }) {
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [stats, setStats] = useState<WishlistStat[]>([])
+  const [loadingStats, setLoadingStats] = useState(false)
+
+  useEffect(() => {
+    setLoadingStats(true)
+    getWishlistStatsForAdmin().then(s => {
+      setStats(s)
+      setLoadingStats(false)
+    })
+  }, [])
+
+  const totalSubmitters = stats.filter(s => s.count > 0).length
 
   function update<K extends keyof WishlistCfg>(key: K, val: WishlistCfg[K]) {
     setCfg(c => ({ ...c, [key]: val }))
@@ -122,6 +142,60 @@ export function WishlistConfigSection({ initial }: { initial: WishlistCfg }) {
         </button>
         {saved && <span className="text-green-600 text-sm">✓ salvato</span>}
         {error && <span className="text-red-600 text-sm">{error}</span>}
+      </div>
+
+      {/* Statistiche compilazione wishlist (no contenuti, solo aggregati) */}
+      <div className="border-t pt-4 mt-4 space-y-2">
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-sm">Stato compilazione wishlist</h3>
+          <span className="text-xs text-gray-500">
+            {totalSubmitters} / {stats.length} squadre
+          </span>
+        </div>
+        <p className="text-xs text-gray-500">
+          🔒 Vedi solo conteggi e Quotazione totale. I giocatori scelti restano privati fino al sorteggio.
+        </p>
+        {loadingStats ? (
+          <p className="text-xs text-gray-400 py-2">Carico…</p>
+        ) : (
+          <div className="border rounded-lg overflow-hidden">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b bg-gray-50">
+                  <th className="text-left px-3 py-2 font-medium">Squadra</th>
+                  <th className="text-right px-2 py-2">Giocatori</th>
+                  <th className="text-right px-2 py-2 text-yellow-600">Quotazione</th>
+                  <th className="text-right px-3 py-2">Stato</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.map(s => {
+                  const compiled = s.count > 0
+                  const pctFvm = cfg.maxFvm > 0 ? Math.round(s.fvm_total / cfg.maxFvm * 100) : null
+                  return (
+                    <tr key={s.team_id} className="border-b">
+                      <td className="px-3 py-1.5">
+                        <div className="font-medium truncate">{s.team_name}</div>
+                        <div className="text-[10px] text-gray-400 truncate">{s.owner_name ?? '—'}</div>
+                      </td>
+                      <td className="text-right px-2 py-1.5 font-mono">
+                        {s.count}/{cfg.maxTotal}
+                      </td>
+                      <td className="text-right px-2 py-1.5 font-mono text-yellow-600 font-semibold">
+                        {s.fvm_total}{pctFvm != null && <span className="text-gray-400 text-[10px] ml-1">({pctFvm}%)</span>}
+                      </td>
+                      <td className="text-right px-3 py-1.5">
+                        {compiled
+                          ? <span className="text-green-600 font-semibold">✓ compilata</span>
+                          : <span className="text-gray-400">vuota</span>}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   )
