@@ -3,7 +3,7 @@ import { useState, useTransition } from 'react'
 import { draftStats } from '@/lib/draft/generator'
 import type { DraftResult, DraftTeamAssignment } from '@/lib/draft/generator'
 import type { Team } from '@/lib/supabase/types'
-import { scheduleDraft, startApplyDraft, applyDraftBatch, finalizeDraftApply } from '@/lib/draft/session-actions'
+import { scheduleDraft, startApplyDraft, applyDraftBatch, finalizeDraftApply, resetAllRosters } from '@/lib/draft/session-actions'
 
 type RawPlayer = { id: number; name: string; roles: string[]; fvm: number | null; serie_a_team: string | null }
 type ActiveDraft = { id: string; season: string; scheduled_at: string | null; locked_at: string | null; applied_at: string | null; result: unknown } | null
@@ -215,6 +215,27 @@ export function DraftSection({ teams, players, activeDraft }: Props) {
       <div className="text-xs text-gray-400 pt-2 flex items-center justify-between">
         <p>Per applicare le rose: usa il pulsante &quot;Applica&quot; dopo l&apos;esecuzione.</p>
         <a href="/admin/sorteggi" className="text-blue-500 underline flex-shrink-0 ml-4">Storico sorteggi →</a>
+      </div>
+
+      {/* Reset rose — zona pericolosa */}
+      <div className="border-2 border-red-200 rounded-lg p-3 bg-red-50 mt-4">
+        <p className="text-xs font-bold text-red-700 mb-1">⚠️ Zona pericolosa</p>
+        <p className="text-xs text-red-600 mb-2">
+          Resetta tutte le rose attuali (rimuove ogni assegnazione giocatore→squadra). Storia sorteggi intatta.
+        </p>
+        <button
+          onClick={() => {
+            if (!confirm('Resettare TUTTE le rose? L\'azione è irreversibile. I giocatori torneranno svincolati.')) return
+            startTransition(async () => {
+              const r = await resetAllRosters()
+              if ('error' in r && r.error) alert(`Errore: ${r.error}`)
+              else alert('✓ Rose resettate. Tutti i giocatori sono svincolati.')
+            })
+          }}
+          disabled={isPending}
+          className="bg-red-600 text-white px-3 py-1.5 rounded text-xs font-semibold disabled:opacity-50">
+          🗑 Reset rose
+        </button>
       </div>
     </div>
   )

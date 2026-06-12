@@ -114,6 +114,22 @@ export async function applyDraftBatch(
   return { done: batch.length, errors }
 }
 
+// Reset totale rose: rimuove tutte le assegnazioni dei giocatori.
+// Marca anche tutti i draft_sessions applicati come "non applicati" non si fa,
+// solo i players vengono ripuliti — la storia draft_sessions resta intatta.
+export async function resetAllRosters() {
+  await assertAdmin()
+  const service = await createServiceClient()
+  const { error } = await service
+    .from('players')
+    .update({ is_sold: false, sold_to_team_id: null, sold_price: null })
+    .neq('id', 0)
+  if (error) return { error: error.message }
+  revalidatePath('/dashboard')
+  revalidatePath('/admin')
+  return { ok: true }
+}
+
 // Marca la sessione come applicata
 export async function finalizeDraftApply(sessionId: string) {
   await assertAdmin()
