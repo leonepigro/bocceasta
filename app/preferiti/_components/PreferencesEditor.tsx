@@ -67,13 +67,15 @@ export function PreferencesEditor({ players, initialPreferences, maxTotal, maxPe
     })
   }, [players, filter, roleFilter, showOnlySelected, prefs, allowedGkIds])
 
-  // Assegnazione ruoli effettivi greedy: i giocatori meno flessibili (meno ruoli)
-  // riempiono prima i loro slot, poi i multi-ruolo scalano al primo libero.
-  // Riflette esattamente la logica del sorteggio.
-  const effectiveAssignment = useMemo(() => {
+  // Greedy: i giocatori meno flessibili (meno ruoli) riempiono prima i loro slot,
+  // poi i multi-ruolo scalano al primo libero. Riflette la logica del sorteggio.
+  function runGreedy(playerSet: Iterable<number>): {
+    counts: Record<string, number>
+    byPlayer: Map<number, string>
+  } {
     const counts: Record<string, number> = {}
     const byPlayer = new Map<number, string>()
-    const prefPlayers = [...prefs]
+    const prefPlayers = [...playerSet]
       .map(id => players.find(p => p.id === id))
       .filter((p): p is Player => p != null)
       .sort((a, b) => {
@@ -94,9 +96,17 @@ export function PreferencesEditor({ players, initialPreferences, maxTotal, maxPe
       byPlayer.set(p.id, assigned)
     }
     return { counts, byPlayer }
-  }, [prefs, players, maxPerRole])
+  }
 
+  const effectiveAssignment = useMemo(() => runGreedy(prefs), [prefs, players, maxPerRole])  // eslint-disable-line react-hooks/exhaustive-deps
   const countByRole = effectiveAssignment.counts
+
+  // Preview per giocatori non selezionati: simula l'aggiunta e ritorna il ruolo assegnato.
+  // Esattamente lo stesso codice del greedy reale → garantita coerenza con la selezione effettiva.
+  function previewRoleForAdd(playerId: number): string {
+    const sim = runGreedy([...prefs, playerId])
+    return sim.byPlayer.get(playerId) ?? players.find(p => p.id === playerId)?.roles[0] ?? ''
+  }
 
   const wishlistFvm = useMemo(() => {
     let s = 0
@@ -272,16 +282,10 @@ export function PreferencesEditor({ players, initialPreferences, maxTotal, maxPe
         {filtered.slice(0, 500).map(p => {
           const selected = prefs.has(p.id)
           const disabled = !selected && isFull
-          // Ruolo effettivo:
-          // - Se già selezionato: quello reale assegnato dal greedy (dipende dall'ordine inserimento)
-          // - Se non selezionato: simula "che ruolo occuperebbe se lo aggiungessi ora"
+          // Ruolo effettivo: stesso greedy in entrambi i casi → garantita coerenza pre/post selezione.
           const effectiveRole = selected
             ? (effectiveAssignment.byPlayer.get(p.id) ?? p.roles[0])
-            : (p.roles.find(r => {
-                const max = maxPerRole[r]
-                if (max == null) return true
-                return (countByRole[r] ?? 0) < max
-              }) ?? p.roles[0])
+            : previewRoleForAdd(p.id)
           return (
             <button key={p.id} onClick={() => toggle(p.id)} disabled={disabled}
               className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition
