@@ -136,3 +136,73 @@ Strumento operativo. Possibili evoluzioni:
 - Integrazione fantacalcio.it: push rose post-sorteggio
 - Gestione presenze giornata
 - Dashboard scontri/classifica condivisa con la lega
+
+## 🏟️ Self-hosting per la tua lega
+
+Vuoi usare Bocceasta per la tua lega di amici? Fai un fork e deploya in 30 minuti — istanza isolata, dati tuoi, zero costi (free tier Supabase + Vercel coprono tutto).
+
+👉 **[Guida completa: deploy nuova lega](docs/DEPLOY_NEW_LEAGUE.md)**
+
+### Diagramma flusso deploy
+
+```mermaid
+flowchart LR
+    A[🍴 Fork repo<br/>GitHub] --> B[🗄️ Nuovo progetto<br/>Supabase]
+    B --> C[📝 Esegui migration<br/>SQL Editor]
+    C --> D[👤 Crea admin<br/>+ ruolo]
+    D --> E[🚀 Deploy Vercel<br/>+ env vars]
+    E --> F[📥 Import Excel<br/>fantacalcio.it]
+    F --> G[👥 Onboarding<br/>partecipanti]
+    G --> H[⚙️ Config wishlist<br/>+ sorteggio]
+
+    style A fill:#24292e,color:#fff
+    style B fill:#3ECF8E,color:#fff
+    style C fill:#3ECF8E,color:#fff
+    style D fill:#3ECF8E,color:#fff
+    style E fill:#000,color:#fff
+    style F fill:#c0392b,color:#fff
+    style G fill:#c0392b,color:#fff
+    style H fill:#e8a020,color:#fff
+```
+
+### Architettura runtime
+
+```mermaid
+flowchart TB
+    subgraph user["👤 Partecipante"]
+        U1[Browser]
+    end
+
+    subgraph vercel["☁️ Vercel (Next.js)"]
+        V1[Pagine Server]
+        V2[Server Actions]
+        V3[Static assets]
+    end
+
+    subgraph supabase["🗄️ Supabase"]
+        DB[(PostgreSQL<br/>+ RLS)]
+        AUTH[Auth<br/>email/password]
+        SVC[Service Role<br/>admin operations]
+    end
+
+    U1 -- HTTPS --> V1
+    V1 -- read SSR --> DB
+    V1 -- session --> AUTH
+    V2 -- write --> DB
+    V2 -- admin tasks --> SVC
+
+    style user fill:#f9f9f9
+    style vercel fill:#e3f2fd
+    style supabase fill:#e8f5e9
+```
+
+### Costi stimati (free tier)
+
+| Servizio | Free tier | 1 lega usa |
+|---|---|---|
+| Supabase DB | 500 MB | ~5 MB (1%) |
+| Supabase MAU | 50.000 | ~10 utenti (0.02%) |
+| Vercel bandwidth | 100 GB/mese | ~1 GB (1%) |
+| Vercel build min | 6.000/mese | ~20 min (0.3%) |
+
+**Tradotto**: 1 deploy free regge tranquillamente 50+ leghe contemporanee senza spendere un euro.
