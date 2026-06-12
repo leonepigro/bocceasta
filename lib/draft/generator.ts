@@ -51,23 +51,30 @@ function shuffle<T>(arr: T[]): T[] {
 export type Wishlist = Map<number, Set<number>>
 
 // Distribuzione globale: scegli team col totale FVM più basso che ha slot per il ruolo.
+// Multi-ruolo: se il primario è pieno, scala al secondario/terziario disponibile.
 // Wishlist: se ≥1 team eligibile ha il giocatore in preferenza, restringe a quelli.
 // Conflitti veri (≥2 contendenti wishlist) → chi vince accumula penalty per i successivi.
 function globalBalancedDistribute(
   allPlayers: DraftPlayer[],
+  candidateRoles: string[],     // ruoli ammessi per questa fase (outfield)
   assignments: DraftTeamAssignment[],
   wishlist: Wishlist | null,
   conflicts: DraftConflict[]
 ): void {
   const n = assignments.length
 
+  // Pre-conteggio target per ruolo: basato sui ruoli primari di tutti i giocatori
   const roleCounts: Record<string, number> = {}
-  for (const p of allPlayers) roleCounts[p.primary_role] = (roleCounts[p.primary_role] ?? 0) + 1
+  for (const p of allPlayers) {
+    if (candidateRoles.includes(p.primary_role)) {
+      roleCounts[p.primary_role] = (roleCounts[p.primary_role] ?? 0) + 1
+    }
+  }
   const roleTarget: Record<string, number> = {}
-  for (const [role, cnt] of Object.entries(roleCounts)) roleTarget[role] = Math.floor(cnt / n)
+  for (const r of candidateRoles) roleTarget[r] = Math.floor((roleCounts[r] ?? 0) / n)
 
   const remaining: Record<string, number>[] = Array.from({ length: n }, () =>
-    Object.fromEntries(Object.entries(roleTarget).map(([r, t]) => [r, t]))
+    Object.fromEntries(candidateRoles.map(r => [r, roleTarget[r]]))
   )
 
   const totalFvm: number[] = assignments.map(a =>
@@ -78,50 +85,56 @@ function globalBalancedDistribute(
   const sorted = [...allPlayers].sort((a, b) => (b.fvm ?? 0) - (a.fvm ?? 0))
 
   for (const player of sorted) {
-    const role = player.primary_role
+    // Lista ruoli giocabili: primario prima, poi secondari (solo se in candidateRoles)
+    const tryRoles = player.roles.filter(r => candidateRoles.includes(r))
+    if (tryRoles.length === 0) continue
 
-    let eligible = [...Array(n).keys()].filter(i => (remaining[i][role] ?? 0) > 0)
-    if (eligible.length === 0) continue
+    let placed = false
+    for (const role of tryRoles) {
+      let eligible = [...Array(n).keys()].filter(i => (remaining[i][role] ?? 0) > 0)
+      if (eligible.length === 0) continue
 
-    let isConflict = false
-    let contendersIdx: number[] = []
+      let isConflict = false
+      let contendersIdx: number[] = []
 
-    const fans = wishlist?.get(player.id)
-    if (fans && fans.size > 0) {
-      // Equità: wishlist applica solo se team è a/sotto la media corrente.
-      // Chi sta accumulando top player non può sforare la media tramite wishlist.
-      const avg = totalFvm.reduce((s, v) => s + v, 0) / n
-      const wishedAndEligible = eligible.filter(i => fans.has(i) && totalFvm[i] <= avg)
-      if (wishedAndEligible.length > 0) {
-        eligible = wishedAndEligible
-        contendersIdx = wishedAndEligible
-        isConflict = wishedAndEligible.length >= 2
+      const fans = wishlist?.get(player.id)
+      if (fans && fans.size > 0) {
+        const avg = totalFvm.reduce((s, v) => s + v, 0) / n
+        const wishedAndEligible = eligible.filter(i => fans.has(i) && totalFvm[i] <= avg)
+        if (wishedAndEligible.length > 0) {
+          eligible = wishedAndEligible
+          contendersIdx = wishedAndEligible
+          isConflict = wishedAndEligible.length >= 2
+        }
       }
-    }
 
-    eligible.sort((a, b) => {
-      // Durante conflitto vero: penalizza chi ha già vinto conflitti precedenti
-      const aScore = totalFvm[a] + (isConflict ? conflictWins[a] * CONFLICT_WIN_PENALTY : 0)
-      const bScore = totalFvm[b] + (isConflict ? conflictWins[b] * CONFLICT_WIN_PENALTY : 0)
-      const diff = aScore - bScore
-      return diff + (Math.random() - 0.5) * 5
-    })
-
-    const pick = eligible[0]
-    assignments[pick].players.push(player)
-    totalFvm[pick] += player.fvm ?? 0
-    remaining[pick][role]--
-
-    if (isConflict) {
-      conflictWins[pick]++
-      conflicts.push({
-        player_id: player.id,
-        player_name: player.name,
-        primary_role: player.primary_role,
-        contenders: contendersIdx.map(i => assignments[i].team.team_name),
-        winner: assignments[pick].team.team_name,
+      eligible.sort((a, b) => {
+        const aScore = totalFvm[a] + (isConflict ? conflictWins[a] * CONFLICT_WIN_PENALTY : 0)
+        const bScore = totalFvm[b] + (isConflict ? conflictWins[b] * CONFLICT_WIN_PENALTY : 0)
+        const diff = aScore - bScore
+        return diff + (Math.random() - 0.5) * 5
       })
+
+      const pick = eligible[0]
+      // Salva il giocatore con il ruolo effettivamente occupato
+      assignments[pick].players.push({ ...player, primary_role: role })
+      totalFvm[pick] += player.fvm ?? 0
+      remaining[pick][role]--
+
+      if (isConflict) {
+        conflictWins[pick]++
+        conflicts.push({
+          player_id: player.id,
+          player_name: player.name,
+          primary_role: role,
+          contenders: contendersIdx.map(i => assignments[i].team.team_name),
+          winner: assignments[pick].team.team_name,
+        })
+      }
+      placed = true
+      break
     }
+    void placed // soft fail: giocatore non collocato se nessun ruolo ha slot
   }
 }
 
@@ -206,10 +219,13 @@ function generateSingleDraft(
     serieATeamsCount[pick]++
   }
 
-  // ─── OUTFIELD distribuiti per Quotazione (parte dal totale già caricato coi portieri) ───
-  const allOutfield = players.filter(p => OUTFIELD_ROLES.includes(p.primary_role))
+  // ─── OUTFIELD: include tutti i giocatori che hanno almeno un ruolo outfield ───
+  // I multi-ruolo (es. Cabal: B, Ds, E) possono fallback su secondario se primario pieno.
+  const allOutfield = players.filter(p =>
+    p.roles.some(r => OUTFIELD_ROLES.includes(r))
+  )
   const conflicts: DraftConflict[] = []
-  globalBalancedDistribute(allOutfield, assignments, wishlist, conflicts)
+  globalBalancedDistribute(allOutfield, OUTFIELD_ROLES, assignments, wishlist, conflicts)
 
   return { assignments, conflicts }
 }
