@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { getMyPreferences, getMyTeamId } from '@/lib/preferences/actions'
+import { getMyPreferences, getMyTeamId, getWishlistConfigPublic } from '@/lib/preferences/actions'
 import { PreferencesEditor } from './_components/PreferencesEditor'
 
 export default async function PreferitiPage() {
@@ -18,13 +18,24 @@ export default async function PreferitiPage() {
     )
   }
 
-  const [{ data: team }, { data: players }, preferences] = await Promise.all([
+  const [{ data: team }, { data: players }, preferences, cfg] = await Promise.all([
     supabase.from('teams').select('team_name').eq('id', teamId).single(),
     supabase.from('players')
       .select('id, name, roles, fvm, serie_a_team')
       .order('fvm', { ascending: false }),
     getMyPreferences(),
+    getWishlistConfigPublic(),
   ])
+
+  if (!cfg.enabled) {
+    return (
+      <div className="min-h-screen p-8 text-center text-gray-500">
+        <p className="text-lg font-semibold mb-2">Wishlist disabilitata</p>
+        <p className="text-sm">Contatta l&apos;admin per attivarla.</p>
+        <Link href="/dashboard" className="inline-block mt-4 text-blue-500 underline text-sm">← Dashboard</Link>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--background)' }}>
@@ -43,6 +54,8 @@ export default async function PreferitiPage() {
         <PreferencesEditor
           players={(players ?? []) as Parameters<typeof PreferencesEditor>[0]['players']}
           initialPreferences={preferences}
+          maxTotal={cfg.maxTotal}
+          maxPerRole={cfg.maxPerRole}
         />
       </main>
     </div>

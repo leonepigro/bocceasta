@@ -10,9 +10,10 @@ import { TeamsSection } from './TeamsSection'
 import { ExportSection } from './ExportSection'
 import { FantacalcioSection } from './FantacalcioSection'
 import { DraftSection } from './DraftSection'
+import { WishlistConfigSection } from './WishlistConfigSection'
 import type { Config, Team } from '@/lib/supabase/types'
 
-type Section = 'import' | 'roles' | 'config' | 'auctions' | 'teams' | 'export' | 'fantacalcio' | 'draft'
+type Section = 'import' | 'roles' | 'config' | 'auctions' | 'teams' | 'export' | 'fantacalcio' | 'draft' | 'wishlist'
 
 type AuctionRow = {
   id: string
@@ -61,6 +62,13 @@ export default function AdminPanel({ config, teams, auctions, players, activeDra
           {active === 'export' && <ExportSection />}
           {active === 'fantacalcio' && <FantacalcioSection teams={teams} />}
           {active === 'draft' && <DraftSection teams={teams} players={players} activeDraft={activeDraft} />}
+          {active === 'wishlist' && config && (
+            <WishlistConfigSection initial={{
+              enabled: config.wishlist_enabled,
+              maxTotal: config.wishlist_max_total,
+              maxPerRole: config.wishlist_max_per_role,
+            }} />
+          )}
         </main>
       </div>
     </div>

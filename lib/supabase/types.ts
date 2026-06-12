@@ -55,6 +55,9 @@ export type Config = {
   auction_duration_hours: number
   last_minute_extension_minutes: number
   last_minute_threshold_minutes: number
+  wishlist_enabled: boolean
+  wishlist_max_total: number
+  wishlist_max_per_role: Record<string, number>
 }
 
 export type RosterRequirement = {

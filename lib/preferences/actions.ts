@@ -1,6 +1,44 @@
 'use server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+
+type WishlistConfig = {
+  enabled: boolean
+  maxTotal: number
+  maxPerRole: Record<string, number>
+}
+
+async function getWishlistConfig(): Promise<WishlistConfig> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('config')
+    .select('wishlist_enabled, wishlist_max_total, wishlist_max_per_role')
+    .eq('id', 1).maybeSingle()
+  return {
+    enabled: data?.wishlist_enabled ?? true,
+    maxTotal: data?.wishlist_max_total ?? 30,
+    maxPerRole: data?.wishlist_max_per_role ?? {},
+  }
+}
+
+export async function getWishlistConfigPublic(): Promise<WishlistConfig> {
+  return getWishlistConfig()
+}
+
+export async function updateWishlistConfig(cfg: WishlistConfig) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user || user.user_metadata?.role !== 'admin') return { error: 'Unauthorized' }
+  const service = await createServiceClient()
+  await service.from('config').update({
+    wishlist_enabled: cfg.enabled,
+    wishlist_max_total: cfg.maxTotal,
+    wishlist_max_per_role: cfg.maxPerRole,
+  }).eq('id', 1)
+  revalidatePath('/admin')
+  revalidatePath('/preferiti')
+  return { ok: true }
+}
 
 export async function getMyTeamId(): Promise<string | null> {
   const supabase = await createClient()
@@ -24,14 +62,15 @@ export async function getMyPreferences(): Promise<number[]> {
   return (data ?? []).map(r => r.player_id)
 }
 
-const MAX_WISHLIST_SIZE = 30
-
 export async function togglePreference(playerId: number) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
   const teamId = await getMyTeamId()
   if (!teamId) return { error: 'No team' }
+
+  const cfg = await getWishlistConfig()
+  if (!cfg.enabled) return { error: 'Wishlist disabilitata' }
 
   const { data: existing } = await supabase
     .from('team_preferences')
@@ -45,20 +84,39 @@ export async function togglePreference(playerId: number) {
       .delete().eq('team_id', teamId).eq('player_id', playerId)
     revalidatePath('/preferiti')
     return { added: false }
-  } else {
-    // Limite 30 wishlist
-    const { count } = await supabase
-      .from('team_preferences')
-      .select('*', { count: 'exact', head: true })
-      .eq('team_id', teamId)
-    if ((count ?? 0) >= MAX_WISHLIST_SIZE) {
-      return { error: `Limite wishlist raggiunto (${MAX_WISHLIST_SIZE} giocatori)` }
-    }
-    await supabase.from('team_preferences')
-      .insert({ team_id: teamId, player_id: playerId })
-    revalidatePath('/preferiti')
-    return { added: true }
   }
+
+  // Conta totali e per ruolo del player target
+  const [{ count: total }, { data: player }, { data: currentPrefs }] = await Promise.all([
+    supabase.from('team_preferences')
+      .select('*', { count: 'exact', head: true }).eq('team_id', teamId),
+    supabase.from('players')
+      .select('id, roles').eq('id', playerId).single(),
+    supabase.from('team_preferences')
+      .select('player_id, players!inner(roles)')
+      .eq('team_id', teamId),
+  ])
+
+  if ((total ?? 0) >= cfg.maxTotal) {
+    return { error: `Limite wishlist raggiunto (${cfg.maxTotal} giocatori)` }
+  }
+
+  // Conta giocatori in wishlist con stesso ruolo primario
+  const targetRole = player?.roles?.[0]
+  if (targetRole && cfg.maxPerRole[targetRole] != null) {
+    const sameRole = (currentPrefs ?? []).filter(p => {
+      const roles = (p as unknown as { players: { roles: string[] } }).players?.roles
+      return roles?.[0] === targetRole
+    }).length
+    if (sameRole >= cfg.maxPerRole[targetRole]) {
+      return { error: `Limite per ruolo ${targetRole} raggiunto (${cfg.maxPerRole[targetRole]})` }
+    }
+  }
+
+  await supabase.from('team_preferences')
+    .insert({ team_id: teamId, player_id: playerId })
+  revalidatePath('/preferiti')
+  return { added: true }
 }
 
 // Per il sorteggio: tutte le preferenze di tutti i team

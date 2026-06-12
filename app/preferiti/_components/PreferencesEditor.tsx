@@ -2,7 +2,7 @@
 import { useState, useTransition, useMemo } from 'react'
 import { togglePreference } from '@/lib/preferences/actions'
 
-const MAX_WISHLIST = 30
+const N_TEAMS = 10  // numero squadre Bocceasta
 
 type Player = {
   id: number
@@ -20,25 +20,47 @@ const ROLE_COLOR: Record<string, string> = {
 
 const ALL_ROLES = ['Por', 'Dc', 'B', 'Dd', 'Ds', 'E', 'M', 'C', 'T', 'W', 'A', 'Pc']
 
-export function PreferencesEditor({
-  players, initialPreferences,
-}: { players: Player[]; initialPreferences: number[] }) {
+type Props = {
+  players: Player[]
+  initialPreferences: number[]
+  maxTotal: number
+  maxPerRole: Record<string, number>
+}
+
+export function PreferencesEditor({ players, initialPreferences, maxTotal, maxPerRole }: Props) {
+  const MAX_WISHLIST = maxTotal
   const [prefs, setPrefs] = useState(new Set(initialPreferences))
   const [filter, setFilter] = useState('')
   const [roleFilter, setRoleFilter] = useState<string>('all')
   const [showOnlySelected, setShowOnlySelected] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [, startTransition] = useTransition()
 
+  // Set di ID portieri opzionabili: solo il top FVM per ogni squadra Serie A.
+  // Motivo: i portieri vengono assegnati in blocco (tutti della squadra a chi pesca quella squadra).
+  const allowedGkIds = useMemo(() => {
+    const topPerTeam = new Map<string, Player>()
+    for (const p of players) {
+      if (p.roles[0] !== 'Por' || !p.serie_a_team) continue
+      const cur = topPerTeam.get(p.serie_a_team)
+      if (!cur || (p.fvm ?? 0) > (cur.fvm ?? 0)) topPerTeam.set(p.serie_a_team, p)
+    }
+    return new Set([...topPerTeam.values()].map(p => p.id))
+  }, [players])
+
+  // Giocatori visibili nella lista
   const filtered = useMemo(() => {
     const q = filter.toLowerCase().trim()
     return players.filter(p => {
+      // Portieri: solo top per squadra Serie A
+      if (p.roles[0] === 'Por' && !allowedGkIds.has(p.id)) return false
       if (showOnlySelected && !prefs.has(p.id)) return false
       if (roleFilter !== 'all' && !p.roles.includes(roleFilter)) return false
       if (q && !p.name.toLowerCase().includes(q) &&
           !(p.serie_a_team ?? '').toLowerCase().includes(q)) return false
       return true
     })
-  }, [players, filter, roleFilter, showOnlySelected, prefs])
+  }, [players, filter, roleFilter, showOnlySelected, prefs, allowedGkIds])
 
   const countByRole = useMemo(() => {
     const c: Record<string, number> = {}
@@ -60,20 +82,62 @@ export function PreferencesEditor({
     return s
   }, [prefs, players])
 
+  // Media corretta: somma solo dei giocatori effettivamente distribuiti nel sorteggio,
+  // diviso N_TEAMS. Esclude leftover per role (floor(count/N)*N distribuiti, gli altri scartati).
+  // Portieri: i sorteggio assegna in blocco per squadra → conta TUTTI i portieri.
   const avgPerTeam = useMemo(() => {
-    const total = players.reduce((s, p) => s + (p.fvm ?? 0), 0)
-    return Math.round(total / 10)
+    const byRole = new Map<string, number[]>()
+    for (const p of players) {
+      const r = p.roles[0]
+      const arr = byRole.get(r) ?? []
+      arr.push(p.fvm ?? 0)
+      byRole.set(r, arr)
+    }
+    let total = 0
+    for (const [role, fvms] of byRole) {
+      const sorted = [...fvms].sort((a, b) => b - a)
+      if (role === 'Por') {
+        // Portieri: tutti contano (blocco per squadra Serie A)
+        total += sorted.reduce((s, v) => s + v, 0)
+      } else {
+        // Outfield: floor(N/teams) * teams distribuiti, top FVM
+        const take = Math.floor(sorted.length / N_TEAMS) * N_TEAMS
+        total += sorted.slice(0, take).reduce((s, v) => s + v, 0)
+      }
+    }
+    return Math.round(total / N_TEAMS)
   }, [players])
 
   const isFull = prefs.size >= MAX_WISHLIST
   const overAvg = wishlistFvm > avgPerTeam
 
+  function countPrefsInRole(role: string): number {
+    let c = 0
+    for (const id of prefs) {
+      const p = players.find(x => x.id === id)
+      if (p?.roles[0] === role) c++
+    }
+    return c
+  }
+
   function toggle(id: number) {
+    const player = players.find(p => p.id === id)
+    if (!player) return
+    setError(null)
     const newSet = new Set(prefs)
     if (newSet.has(id)) {
       newSet.delete(id)
     } else {
-      if (isFull) return
+      if (isFull) {
+        setError(`Limite wishlist raggiunto (${MAX_WISHLIST})`)
+        return
+      }
+      const role = player.roles[0]
+      const roleLimit = maxPerRole[role]
+      if (roleLimit != null && countPrefsInRole(role) >= roleLimit) {
+        setError(`Limite per ruolo ${role} raggiunto (${roleLimit})`)
+        return
+      }
       newSet.add(id)
     }
     setPrefs(newSet)
@@ -122,15 +186,20 @@ export function PreferencesEditor({
         <div className="flex flex-wrap gap-1.5">
           {ALL_ROLES.map(r => {
             const c = countByRole[r] ?? 0
+            const lim = maxPerRole[r]
+            const atLimit = lim != null && c >= lim
             return (
               <span key={r}
-                className={`text-xs px-2 py-1 rounded font-mono ${c > 0 ? 'text-white' : 'text-gray-400 bg-gray-100'}`}
+                className={`text-xs px-2 py-1 rounded font-mono ${c > 0 ? 'text-white' : 'text-gray-400 bg-gray-100'} ${atLimit ? 'ring-2 ring-orange-400' : ''}`}
                 style={c > 0 ? { background: ROLE_COLOR[r] } : undefined}>
-                {r} {c}
+                {r} {c}{lim != null && <span className="opacity-70">/{lim}</span>}
               </span>
             )
           })}
         </div>
+        {error && (
+          <p className="text-xs text-red-600 font-semibold">{error}</p>
+        )}
       </div>
 
       {/* Filtri */}
