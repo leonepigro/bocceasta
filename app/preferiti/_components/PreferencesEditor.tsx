@@ -67,16 +67,36 @@ export function PreferencesEditor({ players, initialPreferences, maxTotal, maxPe
     })
   }, [players, filter, roleFilter, showOnlySelected, prefs, allowedGkIds])
 
-  const countByRole = useMemo(() => {
-    const c: Record<string, number> = {}
-    for (const id of prefs) {
-      const p = players.find(x => x.id === id)
-      if (!p) continue
-      const role = p.roles[0]
-      c[role] = (c[role] ?? 0) + 1
+  // Assegnazione ruoli effettivi greedy: i giocatori meno flessibili (meno ruoli)
+  // riempiono prima i loro slot, poi i multi-ruolo scalano al primo libero.
+  // Riflette esattamente la logica del sorteggio.
+  const effectiveAssignment = useMemo(() => {
+    const counts: Record<string, number> = {}
+    const byPlayer = new Map<number, string>()
+    const prefPlayers = [...prefs]
+      .map(id => players.find(p => p.id === id))
+      .filter((p): p is Player => p != null)
+      .sort((a, b) => {
+        if (a.roles.length !== b.roles.length) return a.roles.length - b.roles.length
+        return (b.fvm ?? 0) - (a.fvm ?? 0)
+      })
+    for (const p of prefPlayers) {
+      let assigned: string | null = null
+      for (const r of p.roles) {
+        const max = maxPerRole[r]
+        if (max == null || (counts[r] ?? 0) < max) {
+          assigned = r
+          break
+        }
+      }
+      if (!assigned) assigned = p.roles[0]
+      counts[assigned] = (counts[assigned] ?? 0) + 1
+      byPlayer.set(p.id, assigned)
     }
-    return c
-  }, [prefs, players])
+    return { counts, byPlayer }
+  }, [prefs, players, maxPerRole])
+
+  const countByRole = effectiveAssignment.counts
 
   const wishlistFvm = useMemo(() => {
     let s = 0
@@ -118,12 +138,7 @@ export function PreferencesEditor({ players, initialPreferences, maxTotal, maxPe
   const overAvg = wishlistFvm > effectiveCap
 
   function countPrefsInRole(role: string): number {
-    let c = 0
-    for (const id of prefs) {
-      const p = players.find(x => x.id === id)
-      if (p?.roles[0] === role) c++
-    }
-    return c
+    return countByRole[role] ?? 0
   }
 
   function toggle(id: number) {
@@ -257,13 +272,16 @@ export function PreferencesEditor({ players, initialPreferences, maxTotal, maxPe
         {filtered.slice(0, 500).map(p => {
           const selected = prefs.has(p.id)
           const disabled = !selected && isFull
-          // Ruolo "effettivo" previsto: primo ruolo con slot libero nella wishlist corrente.
-          // Cabal [B, Ds, E]: se B è saturo, viene evidenziato Ds. Riflette il fallback del sorteggio.
-          const effectiveRole = p.roles.find(r => {
-            const max = maxPerRole[r]
-            if (max == null) return true
-            return countPrefsInRole(r) < max
-          }) ?? p.roles[0]
+          // Ruolo effettivo:
+          // - Se già selezionato: quello reale assegnato dal greedy (dipende dall'ordine inserimento)
+          // - Se non selezionato: simula "che ruolo occuperebbe se lo aggiungessi ora"
+          const effectiveRole = selected
+            ? (effectiveAssignment.byPlayer.get(p.id) ?? p.roles[0])
+            : (p.roles.find(r => {
+                const max = maxPerRole[r]
+                if (max == null) return true
+                return (countByRole[r] ?? 0) < max
+              }) ?? p.roles[0])
           return (
             <button key={p.id} onClick={() => toggle(p.id)} disabled={disabled}
               className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition
