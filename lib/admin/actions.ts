@@ -80,6 +80,52 @@ export async function updateTeamInfo(teamId: string, teamName: string, ownerName
   return { success: true }
 }
 
+export async function getTeamEmail(teamId: string): Promise<{ email: string | null; error?: string }> {
+  const service = await assertAdmin()
+  const { data: team, error } = await service.from('teams').select('user_id').eq('id', teamId).single()
+  if (error || !team?.user_id) return { email: null, error: error?.message }
+  const { data, error: authErr } = await service.auth.admin.getUserById(team.user_id)
+  if (authErr) return { email: null, error: authErr.message }
+  return { email: data.user?.email ?? null }
+}
+
+export async function updateTeamEmail(teamId: string, newEmail: string) {
+  const service = await assertAdmin()
+  const { data: team, error } = await service.from('teams').select('user_id').eq('id', teamId).single()
+  if (error || !team?.user_id) return { error: 'Team o utente non trovato' }
+  const { error: authErr } = await service.auth.admin.updateUserById(team.user_id, {
+    email: newEmail,
+    email_confirm: true,
+  })
+  if (authErr) return { error: authErr.message }
+  revalidatePath('/admin')
+  return { success: true }
+}
+
+export async function resetTeamPassword(teamId: string, newPassword: string) {
+  const service = await assertAdmin()
+  if (!newPassword || newPassword.length < 6) return { error: 'Password min 6 caratteri' }
+  const { data: team, error } = await service.from('teams').select('user_id').eq('id', teamId).single()
+  if (error || !team?.user_id) return { error: 'Team o utente non trovato' }
+  const { error: authErr } = await service.auth.admin.updateUserById(team.user_id, {
+    password: newPassword,
+  })
+  if (authErr) return { error: authErr.message }
+  revalidatePath('/admin')
+  return { success: true }
+}
+
+// Self-service: utente cambia la propria password
+export async function changeMyPassword(newPassword: string) {
+  if (!newPassword || newPassword.length < 6) return { error: 'Password min 6 caratteri' }
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non autenticato' }
+  const { error } = await supabase.auth.updateUser({ password: newPassword })
+  if (error) return { error: error.message }
+  return { success: true }
+}
+
 export async function getExportData() {
   const service = await assertAdmin()
   const { data, error } = await service

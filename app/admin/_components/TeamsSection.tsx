@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { createTeam, updateTeamBudget, updateTeamInfo } from '@/lib/admin/actions'
+import { createTeam, updateTeamBudget, updateTeamInfo, getTeamEmail, updateTeamEmail, resetTeamPassword } from '@/lib/admin/actions'
 import type { Team } from '@/lib/supabase/types'
 
 type Props = { teams: Team[] }
@@ -11,18 +11,46 @@ function TeamRow({ team, onSaved }: { team: Team; onSaved: () => void }) {
   const [teamName, setTeamName] = useState(team.team_name)
   const [ownerName, setOwnerName] = useState(team.owner_name)
   const [budget, setBudget] = useState(team.budget_remaining)
+  const [email, setEmail] = useState<string>('')
+  const [originalEmail, setOriginalEmail] = useState<string>('')
+  const [newPassword, setNewPassword] = useState('')
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const [pwReset, setPwReset] = useState(false)
+
+  // Carica email quando entra in editing
+  useEffect(() => {
+    if (editing && !originalEmail) {
+      getTeamEmail(team.id).then(r => {
+        if (r.email) {
+          setEmail(r.email)
+          setOriginalEmail(r.email)
+        }
+      })
+    }
+  }, [editing, originalEmail, team.id])
 
   function handleSave() {
     setError(null)
+    setPwReset(false)
     startTransition(async () => {
-      const [r1, r2] = await Promise.all([
+      const tasks: Promise<{ error?: string; success?: boolean }>[] = [
         updateTeamInfo(team.id, teamName, ownerName),
-        budget !== team.budget_remaining ? updateTeamBudget(team.id, budget) : Promise.resolve({ success: true }),
-      ])
-      if ('error' in r1 && r1.error) { setError(r1.error); return }
-      if ('error' in r2 && r2.error) { setError(r2.error); return }
+        budget !== team.budget_remaining
+          ? updateTeamBudget(team.id, budget) : Promise.resolve({ success: true }),
+      ]
+      if (email && email !== originalEmail) {
+        tasks.push(updateTeamEmail(team.id, email))
+      }
+      if (newPassword.length >= 6) {
+        tasks.push(resetTeamPassword(team.id, newPassword))
+      }
+      const results = await Promise.all(tasks)
+      for (const r of results) {
+        if (r.error) { setError(r.error); return }
+      }
+      if (newPassword.length >= 6) setPwReset(true)
+      setNewPassword('')
       setEditing(false)
       onSaved()
     })
@@ -32,6 +60,8 @@ function TeamRow({ team, onSaved }: { team: Team; onSaved: () => void }) {
     setTeamName(team.team_name)
     setOwnerName(team.owner_name)
     setBudget(team.budget_remaining)
+    setEmail(originalEmail)
+    setNewPassword('')
     setEditing(false)
   }
 
@@ -71,6 +101,26 @@ function TeamRow({ team, onSaved }: { team: Team; onSaved: () => void }) {
           <span className="text-xs text-gray-400 shrink-0">cr</span>
         </div>
       </div>
+
+      {/* Email + password */}
+      <div className="border-t pt-2 space-y-2">
+        <label className="text-[11px] font-semibold text-gray-500 uppercase">Account</label>
+        <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+          placeholder="Email accesso"
+          className="w-full border rounded px-2 py-1.5 text-sm" />
+        <div className="flex items-center gap-2">
+          <input type="text" value={newPassword} onChange={e => setNewPassword(e.target.value)}
+            placeholder="Nuova password (min 6) — lascia vuoto per non cambiare"
+            className="flex-1 border rounded px-2 py-1.5 text-sm" />
+          {newPassword.length > 0 && newPassword.length < 6 && (
+            <span className="text-xs text-orange-600">min 6</span>
+          )}
+        </div>
+        {pwReset && (
+          <p className="text-green-600 text-xs">✓ password resettata</p>
+        )}
+      </div>
+
       {error && <p className="text-red-500 text-xs">{error}</p>}
       <div className="flex gap-2">
         <button onClick={handleSave} disabled={isPending}
