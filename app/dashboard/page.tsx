@@ -13,7 +13,23 @@ export default async function DashboardPage() {
   const { data: myTeam } = await supabase.from('teams').select('*').eq('user_id', user.id).single()
   if (!myTeam) {
     if (isAdmin) redirect('/admin')
-    return <p className="p-4">Squadra non trovata. Contatta l&apos;admin.</p>
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 text-center" style={{ background: 'var(--background)' }}>
+        <div className="max-w-md space-y-3">
+          <h1 className="font-bold text-lg">✅ Registrazione completata</h1>
+          <p className="text-sm text-gray-600">
+            Il tuo account <strong>{user.email}</strong> è attivo.
+          </p>
+          <p className="text-sm text-gray-500">
+            ⏳ Aspetta che l&apos;admin ti associ a una squadra. Riceverai accesso a wishlist, planner e sorteggio.
+          </p>
+          <Link href="/account"
+            className="inline-block text-xs px-3 py-1.5 rounded border text-gray-600 hover:bg-gray-50">
+            👤 Il mio account
+          </Link>
+        </div>
+      </div>
+    )
   }
 
   const [{ data: teams }, { data: players }] = await Promise.all([

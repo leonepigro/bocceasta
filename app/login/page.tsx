@@ -66,6 +66,9 @@ export default function LoginPage() {
             {loading ? 'Accesso in corso...' : 'Accedi'}
           </button>
         </form>
+        <p className="text-center text-xs text-gray-500 mt-4">
+          Non hai ancora un account? <a href="/register" className="text-blue-600 underline font-semibold">Registrati</a>
+        </p>
       </div>
     </main>
   )
