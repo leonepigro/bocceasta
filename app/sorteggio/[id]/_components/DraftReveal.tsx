@@ -87,20 +87,68 @@ export function DraftReveal({ draft }: { draft: DraftResult }) {
           <details className="border border-orange-200 bg-orange-50 rounded-lg overflow-hidden">
             <summary className="px-4 py-3 cursor-pointer hover:bg-orange-100 font-semibold text-sm text-orange-700 flex items-center justify-between">
               <span>⚔️ Conflitti wishlist ({conflicts.length})</span>
-              <span className="text-xs font-normal text-orange-600">i giocatori contesi</span>
+              <span className="text-xs font-normal text-orange-600">espandi per vedere i criteri</span>
             </summary>
             <div className="divide-y border-t border-orange-200">
               {conflicts
                 .sort((a, b) => b.contenders.length - a.contenders.length)
                 .map(c => (
-                  <div key={c.player_id} className="px-4 py-2 text-xs flex items-center gap-2">
-                    <span className="text-white font-bold px-1.5 py-0.5 rounded w-8 text-center flex-shrink-0"
-                      style={{ background: ROLE_COLOR[c.primary_role] ?? '#9ca3af' }}>{c.primary_role}</span>
-                    <span className="font-semibold flex-shrink-0">{c.player_name}</span>
-                    <span className="text-gray-500 flex-1 truncate">
-                      Conteso: {c.contenders.join(', ')}
-                    </span>
-                    <span className="font-bold text-green-700 flex-shrink-0">→ {c.winner}</span>
+                  <div key={c.player_id} className="px-4 py-3 text-xs space-y-2">
+                    {/* Header: giocatore + media */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-white font-bold px-1.5 py-0.5 rounded w-8 text-center flex-shrink-0"
+                        style={{ background: ROLE_COLOR[c.primary_role] ?? '#9ca3af' }}>{c.primary_role}</span>
+                      <span className="font-semibold">{c.player_name}</span>
+                      {c.avg_quotazione != null && (
+                        <span className="ml-auto text-orange-600 font-medium">media rosa: {c.avg_quotazione}</span>
+                      )}
+                    </div>
+
+                    {/* Tabella contendenti con dettaglio score */}
+                    {c.contenders_detail ? (
+                      <table className="w-full text-[11px]">
+                        <thead>
+                          <tr className="text-gray-400 text-left">
+                            <th className="pb-1 font-medium">Squadra</th>
+                            <th className="pb-1 font-medium text-right">Quotazione</th>
+                            <th className="pb-1 font-medium text-right">Penalità</th>
+                            <th className="pb-1 font-medium text-right">Score</th>
+                            <th className="pb-1 w-5"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {c.contenders_detail
+                            .sort((a, b) => a.score - b.score)
+                            .map(cd => (
+                              <tr key={cd.team_name}
+                                className={cd.won ? 'font-semibold text-green-700' : 'text-gray-500'}>
+                                <td className="py-0.5">{cd.team_name}</td>
+                                <td className="py-0.5 text-right">{cd.quotazione}</td>
+                                <td className="py-0.5 text-right">
+                                  {cd.penalty_wins > 0
+                                    ? <span className="text-orange-500">+{cd.penalty_wins * 50}</span>
+                                    : '—'}
+                                </td>
+                                <td className="py-0.5 text-right font-mono">{cd.score}</td>
+                                <td className="py-0.5 text-center">{cd.won ? '🏆' : ''}</td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <p className="text-gray-500">
+                        Conteso: {c.contenders.join(', ')} → <span className="font-bold text-green-700">{c.winner}</span>
+                      </p>
+                    )}
+
+                    {/* Team esclusi per superamento media */}
+                    {c.excluded_over_avg && c.excluded_over_avg.length > 0 && (
+                      <p className="text-gray-400 italic">
+                        Esclusi (sopra media {c.avg_quotazione}): {c.excluded_over_avg
+                          .map(e => `${e.team_name} (${e.quotazione})`)
+                          .join(', ')}
+                      </p>
+                    )}
                   </div>
                 ))}
             </div>
@@ -178,6 +226,18 @@ export function DraftReveal({ draft }: { draft: DraftResult }) {
             <p className="text-xs text-gray-400 mb-1 uppercase tracking-wide">
               {conflict ? `Vince → ${current.event.teamName}` : current.event.teamName}
             </p>
+            {conflict?.contenders_detail && (() => {
+              const winner = conflict.contenders_detail.find(cd => cd.won)
+              if (!winner) return null
+              return (
+                <p className="text-[11px] text-orange-500 mb-1">
+                  Rosa {winner.quotazione}
+                  {winner.penalty_wins > 0 && <> · +{winner.penalty_wins * 50} penalità</>}
+                  {' '}· score {winner.score}
+                  {conflict.avg_quotazione != null && <> · media {conflict.avg_quotazione}</>}
+                </p>
+              )
+            })()}
             <p className="text-3xl font-black text-gray-800 leading-tight">{current.event.player.name}</p>
             <p className="text-sm text-gray-400 mt-2 flex items-center justify-center gap-1 flex-wrap">
               <span className="flex gap-0.5 mr-1">

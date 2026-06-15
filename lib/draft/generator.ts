@@ -17,12 +17,24 @@ export type DraftTeamAssignment = {
 }
 
 // Conflitto wishlist: ≥2 team avevano lo stesso giocatore in preferenza.
+export type DraftConflictContender = {
+  team_name: string
+  quotazione: number    // quotazione rosa al momento del conflitto
+  penalty_wins: number  // vittorie conflitti già accumulate (prima di questo)
+  score: number         // quotazione + penalty_wins * 50
+  won: boolean
+}
+
 export type DraftConflict = {
   player_id: number
   player_name: string
   primary_role: string
-  contenders: string[]   // team_name di chi aveva il giocatore in wishlist
-  winner: string         // team_name che lo ha vinto
+  contenders: string[]   // team_name (backward compat)
+  winner: string
+  // Campi dettaglio — assenti nei sorteggi salvati prima della v3
+  avg_quotazione?: number
+  contenders_detail?: DraftConflictContender[]
+  excluded_over_avg?: { team_name: string; quotazione: number }[]
 }
 
 export type DraftResult = {
@@ -122,6 +134,25 @@ function globalBalancedDistribute(
       remaining[pick][role]--
 
       if (isConflict) {
+        const avg = totalFvm.reduce((s, v) => s + v, 0) / n
+
+        // Team con il giocatore in wishlist che avevano slot ma erano sopra media
+        const allFansWithSlot = [...(fans ?? new Set<number>())].filter(
+          i => i < n && (remaining[i]?.[role] ?? 0) > 0
+        )
+        const excludedOverAvg = allFansWithSlot
+          .filter(i => totalFvm[i] > avg)
+          .map(i => ({ team_name: assignments[i].team.team_name, quotazione: totalFvm[i] }))
+
+        // Detail contendenti calcolato PRIMA dell'incremento penalty
+        const contendersDetail: DraftConflictContender[] = contendersIdx.map(i => ({
+          team_name: assignments[i].team.team_name,
+          quotazione: totalFvm[i],
+          penalty_wins: conflictWins[i],
+          score: totalFvm[i] + conflictWins[i] * CONFLICT_WIN_PENALTY,
+          won: i === pick,
+        }))
+
         conflictWins[pick]++
         conflicts.push({
           player_id: player.id,
@@ -129,6 +160,9 @@ function globalBalancedDistribute(
           primary_role: role,
           contenders: contendersIdx.map(i => assignments[i].team.team_name),
           winner: assignments[pick].team.team_name,
+          avg_quotazione: Math.round(avg),
+          contenders_detail: contendersDetail,
+          excluded_over_avg: excludedOverAvg,
         })
       }
       placed = true
