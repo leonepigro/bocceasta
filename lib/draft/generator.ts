@@ -108,11 +108,15 @@ function globalBalancedDistribute(
 
       let isConflict = false
       let contendersIdx: number[] = []
+      let capturedAvg = 0
+      let capturedFansWithSlot: number[] = []
 
       const fans = wishlist?.get(player.id)
       if (fans && fans.size > 0) {
-        const avg = totalFvm.reduce((s, v) => s + v, 0) / n
-        const wishedAndEligible = eligible.filter(i => fans.has(i) && totalFvm[i] <= avg)
+        capturedAvg = totalFvm.reduce((s, v) => s + v, 0) / n
+        // Fan che hanno slot per questo ruolo (sia sopra che sotto media)
+        capturedFansWithSlot = eligible.filter(i => fans.has(i))
+        const wishedAndEligible = capturedFansWithSlot.filter(i => totalFvm[i] <= capturedAvg)
         if (wishedAndEligible.length > 0) {
           eligible = wishedAndEligible
           contendersIdx = wishedAndEligible
@@ -128,31 +132,30 @@ function globalBalancedDistribute(
       })
 
       const pick = eligible[0]
-      // Salva il giocatore con il ruolo effettivamente occupato
-      assignments[pick].players.push({ ...player, primary_role: role })
-      totalFvm[pick] += player.fvm ?? 0
-      remaining[pick][role]--
 
+      // Dettaglio conflitto calcolato PRIMA dell'assegnazione per avere quotazioni corrette
+      let contendersDetail: DraftConflictContender[] | undefined
+      let excludedOverAvg: { team_name: string; quotazione: number }[] | undefined
       if (isConflict) {
-        const avg = totalFvm.reduce((s, v) => s + v, 0) / n
-
-        // Team con il giocatore in wishlist che avevano slot ma erano sopra media
-        const allFansWithSlot = [...(fans ?? new Set<number>())].filter(
-          i => i < n && (remaining[i]?.[role] ?? 0) > 0
-        )
-        const excludedOverAvg = allFansWithSlot
-          .filter(i => totalFvm[i] > avg)
-          .map(i => ({ team_name: assignments[i].team.team_name, quotazione: totalFvm[i] }))
-
-        // Detail contendenti calcolato PRIMA dell'incremento penalty
-        const contendersDetail: DraftConflictContender[] = contendersIdx.map(i => ({
+        contendersDetail = contendersIdx.map(i => ({
           team_name: assignments[i].team.team_name,
           quotazione: totalFvm[i],
           penalty_wins: conflictWins[i],
           score: totalFvm[i] + conflictWins[i] * CONFLICT_WIN_PENALTY,
           won: i === pick,
         }))
+        // Fan con slot ma sopra media → esclusi dal conflitto
+        excludedOverAvg = capturedFansWithSlot
+          .filter(i => totalFvm[i] > capturedAvg)
+          .map(i => ({ team_name: assignments[i].team.team_name, quotazione: totalFvm[i] }))
+      }
 
+      // Salva il giocatore con il ruolo effettivamente occupato
+      assignments[pick].players.push({ ...player, primary_role: role })
+      totalFvm[pick] += player.fvm ?? 0
+      remaining[pick][role]--
+
+      if (isConflict) {
         conflictWins[pick]++
         conflicts.push({
           player_id: player.id,
@@ -160,7 +163,7 @@ function globalBalancedDistribute(
           primary_role: role,
           contenders: contendersIdx.map(i => assignments[i].team.team_name),
           winner: assignments[pick].team.team_name,
-          avg_quotazione: Math.round(avg),
+          avg_quotazione: Math.round(capturedAvg),
           contenders_detail: contendersDetail,
           excluded_over_avg: excludedOverAvg,
         })
