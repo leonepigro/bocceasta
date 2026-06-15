@@ -142,9 +142,13 @@ export function RostersView({
               <div className="border rounded-lg divide-y">
                 {g.players.map(p => (
                   <div key={p.id} className="flex items-center gap-3 px-3 py-2">
-                    <span className="text-white text-xs font-bold px-1.5 py-0.5 rounded w-8 text-center flex-shrink-0"
-                      style={{ background: ROLE_COLOR[p.roles[0]] ?? '#9ca3af' }}>
-                      {p.roles[0]}
+                    <span className="flex gap-0.5 flex-shrink-0">
+                      {p.roles.map(r => (
+                        <span key={r} className="text-white text-xs font-bold px-1.5 py-0.5 rounded text-center"
+                          style={{ background: ROLE_COLOR[r] ?? '#9ca3af' }}>
+                          {r}
+                        </span>
+                      ))}
                     </span>
                     <span className="flex-1 text-sm truncate">{p.name}</span>
                     <span className="text-xs text-gray-400 w-20 truncate text-right">{p.serie_a_team ?? '—'}</span>

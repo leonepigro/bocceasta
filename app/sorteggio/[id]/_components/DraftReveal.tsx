@@ -122,9 +122,13 @@ export function DraftReveal({ draft }: { draft: DraftResult }) {
                   .sort((a, b) => ROLE_ORDER.indexOf(a.primary_role) - ROLE_ORDER.indexOf(b.primary_role) || (b.fvm ?? 0) - (a.fvm ?? 0))
                   .map(p => (
                     <div key={p.id} className="flex items-center gap-3 px-4 py-2">
-                      <span className="text-white text-xs font-bold px-1.5 py-0.5 rounded w-8 text-center flex-shrink-0"
-                        style={{ background: ROLE_COLOR[p.primary_role] ?? '#9ca3af' }}>
-                        {p.primary_role}
+                      <span className="flex gap-0.5 flex-shrink-0">
+                        {p.roles.map(r => (
+                          <span key={r} className="text-white text-xs font-bold px-1.5 py-0.5 rounded text-center"
+                            style={{ background: ROLE_COLOR[r] ?? '#9ca3af' }}>
+                            {r}
+                          </span>
+                        ))}
                       </span>
                       <span className="flex-1 text-sm truncate">{p.name}</span>
                       <span className="text-xs text-gray-400">{p.serie_a_team ?? '—'}</span>
@@ -175,10 +179,14 @@ export function DraftReveal({ draft }: { draft: DraftResult }) {
               {conflict ? `Vince → ${current.event.teamName}` : current.event.teamName}
             </p>
             <p className="text-3xl font-black text-gray-800 leading-tight">{current.event.player.name}</p>
-            <p className="text-sm text-gray-400 mt-2">
-              <span className="text-white font-bold px-2 py-0.5 rounded mr-2"
-                style={{ background: ROLE_COLOR[current.event.player.primary_role] }}>
-                {current.event.player.primary_role}
+            <p className="text-sm text-gray-400 mt-2 flex items-center justify-center gap-1 flex-wrap">
+              <span className="flex gap-0.5 mr-1">
+                {current.event.player.roles.map(r => (
+                  <span key={r} className="text-white font-bold px-2 py-0.5 rounded"
+                    style={{ background: ROLE_COLOR[r] ?? '#9ca3af' }}>
+                    {r}
+                  </span>
+                ))}
               </span>
               {current.event.player.serie_a_team} · Quotazione {current.event.player.fvm ?? '—'}
             </p>
@@ -192,9 +200,13 @@ export function DraftReveal({ draft }: { draft: DraftResult }) {
           <div className="grid grid-cols-2 gap-1 max-h-80 overflow-y-auto">
             {current.events.map(e => (
               <div key={e.player.id} className="flex items-center gap-1.5 bg-gray-50 rounded px-2 py-1.5">
-                <span className="text-white text-[10px] font-bold px-1 py-0.5 rounded flex-shrink-0"
-                  style={{ background: ROLE_COLOR[e.player.primary_role] ?? '#9ca3af' }}>
-                  {e.player.primary_role}
+                <span className="flex gap-0.5 flex-shrink-0">
+                  {e.player.roles.map(r => (
+                    <span key={r} className="text-white text-[10px] font-bold px-1 py-0.5 rounded"
+                      style={{ background: ROLE_COLOR[r] ?? '#9ca3af' }}>
+                      {r}
+                    </span>
+                  ))}
                 </span>
                 <span className="text-xs font-medium truncate flex-1">{e.player.name}</span>
                 <span className="text-[10px] text-gray-400 flex-shrink-0">{e.player.fvm}</span>
@@ -216,9 +228,13 @@ export function DraftReveal({ draft }: { draft: DraftResult }) {
             return (
               <div key={`${s.event.player.id}-${i}`}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm ${i === 0 ? 'bg-yellow-50 border border-yellow-200' : 'bg-gray-50'}`}>
-                <span className="text-white text-xs font-bold px-1.5 py-0.5 rounded w-8 text-center flex-shrink-0"
-                  style={{ background: ROLE_COLOR[s.event.player.primary_role] ?? '#9ca3af' }}>
-                  {s.event.player.primary_role}
+                <span className="flex gap-0.5 flex-shrink-0">
+                  {s.event.player.roles.map(r => (
+                    <span key={r} className="text-white text-xs font-bold px-1.5 py-0.5 rounded"
+                      style={{ background: ROLE_COLOR[r] ?? '#9ca3af' }}>
+                      {r}
+                    </span>
+                  ))}
                 </span>
                 <span className="font-medium flex-1 truncate">{s.event.player.name}</span>
                 <span className="text-gray-400 truncate text-xs">{s.event.teamName}</span>
