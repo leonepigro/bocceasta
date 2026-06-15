@@ -249,19 +249,90 @@ function generateSingleDraft(
 
   const totalFvm: number[] = new Array(n).fill(0)
   const serieATeamsCount: number[] = new Array(n).fill(0)
+  const conflicts: DraftConflict[] = []
+  const gkConflictWins: number[] = new Array(n).fill(0)
 
   for (const pair of gkPairs) {
-    const eligible = [...Array(n).keys()].filter(
+    let eligible = [...Array(n).keys()].filter(
       i => serieATeamsCount[i] + pair.length <= GK_SERIE_A_TEAMS_PER_PARTICIPANT
     )
     if (eligible.length === 0) break
 
+    // Wishlist GK: preferenza per squadra Serie A
+    // Se un team ha in wishlist un portiere di questa coppia, viene favorito.
+    let isConflict = false
+    let contendersIdx: number[] = []
+    let capturedAvg = 0
+    let capturedFansWithSlot: number[] = []
+
+    if (wishlist) {
+      const pairPlayerIds = pair.flatMap(slot => slot.players.map(gk => gk.id))
+      const teamsWithPref = new Set<number>()
+      for (const pid of pairPlayerIds) {
+        const fans = wishlist.get(pid)
+        if (fans) for (const i of fans) teamsWithPref.add(i)
+      }
+      if (teamsWithPref.size > 0) {
+        capturedAvg = totalFvm.reduce((s, v) => s + v, 0) / n
+        capturedFansWithSlot = eligible.filter(i => teamsWithPref.has(i))
+        const wishedAndEligible = capturedFansWithSlot.filter(i => totalFvm[i] <= capturedAvg)
+        if (wishedAndEligible.length > 0) {
+          eligible = wishedAndEligible
+          contendersIdx = wishedAndEligible
+          isConflict = wishedAndEligible.length >= 2
+        }
+      }
+    }
+
+    // Detail conflitto calcolato prima dell'assegnazione
+    let contendersDetail: DraftConflictContender[] | undefined
+    let excludedOverAvg: { team_name: string; quotazione: number }[] | undefined
+    if (isConflict) {
+      contendersDetail = contendersIdx.map(i => ({
+        team_name: assignments[i].team.team_name,
+        quotazione: totalFvm[i],
+        penalty_wins: gkConflictWins[i],
+        score: totalFvm[i] + gkConflictWins[i] * CONFLICT_WIN_PENALTY,
+        won: false,
+      }))
+      excludedOverAvg = capturedFansWithSlot
+        .filter(i => totalFvm[i] > capturedAvg)
+        .map(i => ({ team_name: assignments[i].team.team_name, quotazione: totalFvm[i] }))
+    }
+
     eligible.sort((a, b) => {
-      const diff = totalFvm[a] - totalFvm[b]
+      const aScore = totalFvm[a] + (isConflict ? gkConflictWins[a] * CONFLICT_WIN_PENALTY : 0)
+      const bScore = totalFvm[b] + (isConflict ? gkConflictWins[b] * CONFLICT_WIN_PENALTY : 0)
+      const diff = aScore - bScore
       return diff + (Math.random() - 0.5) * 5
     })
 
     const pick = eligible[0]
+
+    if (isConflict && contendersDetail) {
+      contendersDetail = contendersIdx.map(i => ({
+        team_name: assignments[i].team.team_name,
+        quotazione: totalFvm[i],
+        penalty_wins: gkConflictWins[i],
+        score: totalFvm[i] + gkConflictWins[i] * CONFLICT_WIN_PENALTY,
+        won: i === pick,
+      }))
+      gkConflictWins[pick]++
+      // Rappresentante: il GK col FVM più alto nella coppia
+      const topGkInPair = pair.flatMap(s => s.players).sort((a, b) => (b.fvm ?? 0) - (a.fvm ?? 0))[0]
+      const serieALabel = pair.map(s => s.serieATeam).join(' + ')
+      conflicts.push({
+        player_id: topGkInPair?.id ?? -1,
+        player_name: `Por ${serieALabel}`,
+        primary_role: 'Por',
+        contenders: contendersIdx.map(i => assignments[i].team.team_name),
+        winner: assignments[pick].team.team_name,
+        avg_quotazione: Math.round(capturedAvg),
+        contenders_detail: contendersDetail,
+        excluded_over_avg: excludedOverAvg,
+      })
+    }
+
     for (const slot of pair) {
       assignments[pick].gk_serie_a_teams.push(slot.serieATeam)
       for (const gk of slot.players) {
@@ -277,7 +348,6 @@ function generateSingleDraft(
   const allOutfield = players.filter(p =>
     p.roles.some(r => OUTFIELD_ROLES.includes(r))
   )
-  const conflicts: DraftConflict[] = []
   globalBalancedDistribute(allOutfield, OUTFIELD_ROLES, assignments, wishlist, conflicts)
 
   return { assignments, conflicts }
