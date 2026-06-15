@@ -230,15 +230,29 @@ function generateSingleDraft(
     players: gks,
   }))
 
-  // Ordina per topFvm desc, poi assegna al partecipante con quotazione totale più bassa
-  // che ha ancora slot Serie A disponibili (max GK_SERIE_A_TEAMS_PER_PARTICIPANT a testa)
+  // Forma coppie casuali di squadre Serie A prima del greedy:
+  // shuffla separatamente la metà alta e bassa per topFvm, poi le accoppia.
+  // Così ogni sorteggio produce abbinamenti diversi (Roma+Pisa non è fisso).
   const gkSlotsSorted = [...gkSlots].sort((a, b) => b.topFvm - a.topFvm)
+  const midpoint = Math.ceil(gkSlotsSorted.length / 2)
+  const topGk = shuffle(gkSlotsSorted.slice(0, midpoint))
+  const bottomGk = shuffle(gkSlotsSorted.slice(midpoint))
+  type GkPair = typeof gkSlots
+  const gkPairs: GkPair[] = Array.from(
+    { length: Math.max(topGk.length, bottomGk.length) },
+    (_, i) => ([topGk[i], bottomGk[i]].filter(Boolean) as GkPair)
+  ).filter(p => p.length > 0)
+  // La coppia con FVM combinato più alto viene assegnata per prima (bilancia comunque)
+  gkPairs.sort((a, b) =>
+    b.reduce((s, x) => s + x.topFvm, 0) - a.reduce((s, x) => s + x.topFvm, 0)
+  )
+
   const totalFvm: number[] = new Array(n).fill(0)
   const serieATeamsCount: number[] = new Array(n).fill(0)
 
-  for (const slot of gkSlotsSorted) {
+  for (const pair of gkPairs) {
     const eligible = [...Array(n).keys()].filter(
-      i => serieATeamsCount[i] < GK_SERIE_A_TEAMS_PER_PARTICIPANT
+      i => serieATeamsCount[i] + pair.length <= GK_SERIE_A_TEAMS_PER_PARTICIPANT
     )
     if (eligible.length === 0) break
 
@@ -248,12 +262,14 @@ function generateSingleDraft(
     })
 
     const pick = eligible[0]
-    assignments[pick].gk_serie_a_teams.push(slot.serieATeam)
-    for (const gk of slot.players) {
-      assignments[pick].players.push(gk)
-      totalFvm[pick] += gk.fvm ?? 0
+    for (const slot of pair) {
+      assignments[pick].gk_serie_a_teams.push(slot.serieATeam)
+      for (const gk of slot.players) {
+        assignments[pick].players.push(gk)
+        totalFvm[pick] += gk.fvm ?? 0
+      }
+      serieATeamsCount[pick]++
     }
-    serieATeamsCount[pick]++
   }
 
   // ─── OUTFIELD: include tutti i giocatori che hanno almeno un ruolo outfield ───
