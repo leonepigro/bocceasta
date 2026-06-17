@@ -109,18 +109,20 @@ function globalBalancedDistribute(
       let isConflict = false
       let contendersIdx: number[] = []
       let capturedAvg = 0
+      let capturedThreshold = 0
       let capturedFansWithSlot: number[] = []
 
       const fans = wishlist?.get(player.id)
       if (fans && fans.size > 0) {
         capturedAvg = totalFvm.reduce((s, v) => s + v, 0) / n
-        // Fan che hanno slot per questo ruolo (sia sopra che sotto media)
+        // Soglia estesa: media + FVM giocatore più caro rimasto (= player.fvm, sorted desc)
+        capturedThreshold = capturedAvg + (player.fvm ?? 0)
         capturedFansWithSlot = eligible.filter(i => fans.has(i))
-        const wishedAndEligible = capturedFansWithSlot.filter(i => totalFvm[i] <= capturedAvg)
-        if (wishedAndEligible.length > 0) {
-          eligible = wishedAndEligible
-          contendersIdx = wishedAndEligible
-          isConflict = wishedAndEligible.length >= 2
+        if (capturedFansWithSlot.length > 0) {
+          const wishedAndEligible = capturedFansWithSlot.filter(i => totalFvm[i] <= capturedThreshold)
+          contendersIdx = capturedFansWithSlot
+          isConflict = capturedFansWithSlot.length >= 2
+          eligible = wishedAndEligible.length > 0 ? wishedAndEligible : capturedFansWithSlot
         }
       }
 
@@ -144,9 +146,9 @@ function globalBalancedDistribute(
           score: totalFvm[i] + conflictWins[i] * CONFLICT_WIN_PENALTY,
           won: i === pick,
         }))
-        // Fan con slot ma sopra media → esclusi dal conflitto
+        // Fan con slot ma sopra soglia (media + giocatore più caro) → esclusi dal conflitto
         excludedOverAvg = capturedFansWithSlot
-          .filter(i => totalFvm[i] > capturedAvg)
+          .filter(i => totalFvm[i] > capturedThreshold)
           .map(i => ({ team_name: assignments[i].team.team_name, quotazione: totalFvm[i] }))
       }
 
@@ -263,6 +265,7 @@ function generateSingleDraft(
     let isConflict = false
     let contendersIdx: number[] = []
     let capturedAvg = 0
+    let capturedThreshold = 0
     let capturedFansWithSlot: number[] = []
 
     if (wishlist) {
@@ -274,12 +277,15 @@ function generateSingleDraft(
       }
       if (teamsWithPref.size > 0) {
         capturedAvg = totalFvm.reduce((s, v) => s + v, 0) / n
+        // Soglia estesa: media + FVM top GK della coppia
+        const pairMaxFvm = Math.max(...pair.map(s => s.topFvm))
+        capturedThreshold = capturedAvg + pairMaxFvm
         capturedFansWithSlot = eligible.filter(i => teamsWithPref.has(i))
-        const wishedAndEligible = capturedFansWithSlot.filter(i => totalFvm[i] <= capturedAvg)
-        if (wishedAndEligible.length > 0) {
-          eligible = wishedAndEligible
-          contendersIdx = wishedAndEligible
-          isConflict = wishedAndEligible.length >= 2
+        if (capturedFansWithSlot.length > 0) {
+          const wishedAndEligible = capturedFansWithSlot.filter(i => totalFvm[i] <= capturedThreshold)
+          contendersIdx = capturedFansWithSlot
+          isConflict = capturedFansWithSlot.length >= 2
+          eligible = wishedAndEligible.length > 0 ? wishedAndEligible : capturedFansWithSlot
         }
       }
     }
@@ -296,7 +302,7 @@ function generateSingleDraft(
         won: false,
       }))
       excludedOverAvg = capturedFansWithSlot
-        .filter(i => totalFvm[i] > capturedAvg)
+        .filter(i => totalFvm[i] > capturedThreshold)
         .map(i => ({ team_name: assignments[i].team.team_name, quotazione: totalFvm[i] }))
     }
 

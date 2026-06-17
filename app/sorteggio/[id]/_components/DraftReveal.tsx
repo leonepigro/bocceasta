@@ -96,7 +96,7 @@ export function DraftReveal({ draft }: { draft: DraftResult }) {
               <p>Quando ≥2 squadre hanno lo stesso giocatore in wishlist, vince quella con lo <strong>score più basso</strong>.</p>
               <p><strong>Score = Quotazione rosa + Penalità</strong> — la quotazione è calcolata al momento del conflitto, prima dell'assegnazione.</p>
               <p><strong>Penalità:</strong> ogni conflitto vinto in precedenza aggiunge <strong>+50</strong> allo score nei conflitti successivi, svantaggiando chi ha già ricevuto giocatori preferiti.</p>
-              <p><strong>Esclusi (sopra media):</strong> squadre che avevano il giocatore in wishlist ma la cui rosa era già sopra la media al momento del conflitto. Non partecipano alla contesa.</p>
+              <p><strong>Esclusi (sopra soglia):</strong> squadre che avevano il giocatore in wishlist ma la cui rosa superava la soglia (media + quotazione giocatore in conflitto) al momento dell'assegnazione. Non partecipano alla contesa.</p>
             </div>
 
             <div className="divide-y border-t border-orange-200">
@@ -154,7 +154,7 @@ export function DraftReveal({ draft }: { draft: DraftResult }) {
                   {/* Team esclusi per superamento media */}
                   {c.excluded_over_avg && c.excluded_over_avg.length > 0 && (
                     <p className="text-gray-400 italic">
-                      Esclusi (sopra media {c.avg_quotazione}): {c.excluded_over_avg
+                      Esclusi (sopra soglia): {c.excluded_over_avg
                         .map(e => `${e.team_name} (${e.quotazione})`)
                         .join(', ')}
                     </p>
